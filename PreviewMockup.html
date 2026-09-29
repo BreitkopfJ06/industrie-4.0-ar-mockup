@@ -3,106 +3,246 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UI Vorschau - Industrie 4.0 Dashboard</title>
+  <title>Industrie 4.0 - AR HUD View</title>
+  
+  <!-- A-Frame und AR.js einbinden[cite: 2] -->
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
+
+  <!-- AR Event Listener Komponente (Sichere Variante für A-Frame) -->
+  <script>
+    AFRAME.registerComponent('markerhandler', {
+      init: function () {
+        const hud = document.getElementById('hud');
+        
+        // Zeigt das HUD, wenn der Marker gescannt wird[cite: 2]
+        this.el.addEventListener('markerFound', () => {
+          console.log('Marker gefunden! Blende HUD ein.');
+          hud.classList.remove('hidden');
+        });
+
+        // Versteckt das HUD, wenn der Marker verloren geht[cite: 2]
+        this.el.addEventListener('markerLost', () => {
+          console.log('Marker verloren! Blende HUD aus.');
+          hud.classList.add('hidden');
+        });
+      }
+    });
+
+    // Reparierte globale Test-Funktionen für den Desktop (nutzt .emit)
+    window.simulateMarkerFound = () => {
+      document.getElementById('hiro-marker').emit('markerFound');
+    }
+    
+    window.simulateMarkerLost = () => {
+      document.getElementById('hiro-marker').emit('markerLost');
+    }
+  </script>
+
   <style>
-    :root { 
-      color-scheme: dark; 
-      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+    :root {
+      color-scheme: dark;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
     body {
       margin: 0;
-      /* Simulierter verschwommener Maschinen-Hintergrund anstatt Kamera */
-      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-      background-size: cover;
+      overflow: hidden; /* Verhindert Scrollbalken[cite: 2] */
+      background: #000;
+      width: 100vw;
       height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
 
-    /* Modernes AR-Dashboard (Sichtbar by Default) */
-    #overlay {
-      display: block; 
-      width: 90%;
-      max-width: 380px;
-      padding: 24px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 16px;
-      background: rgba(15, 23, 42, 0.8);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+    /* Kamera-/Canvas-Darstellung für AR.js[cite: 2] */
+    video, canvas {
+      width: 100vw !important;
+      height: 100vh !important;
+      object-fit: contain !important; /* Weniger Zoom-Eindruck[cite: 2] */
+      z-index: 1;
+    }
+
+    /* Hilfsklasse zum Ausblenden vor dem Scan */
+    .hidden {
+      display: none !important;
+    }
+
+    /* HUD Layout Container */
+    .hud-container {
+      position: fixed;
+      inset: 0;
+      z-index: 9999; /* Sehr hoch, damit es sicher über der Kamera liegt */
+      display: grid;
+      grid-template-columns: 320px 1fr 320px;
+      grid-template-rows: auto 1fr auto;
+      padding: 20px;
+      pointer-events: none; /* Klicks gehen durch die leere Fläche */
+      box-sizing: border-box;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Einzelne AR-Boxen */
+    .ar-box {
+      pointer-events: auto;
+      background: rgba(15, 23, 42, 0.78);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 12px;
+      padding: 16px 20px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       color: #f8fafc;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
     }
 
-    h2 { 
-      margin-top: 0; 
-      font-size: 1.4rem; 
-      border-bottom: 1px solid rgba(255,255,255,0.1); 
-      padding-bottom: 12px; 
-      color: #38bdf8; 
-      text-align: center;
-      letter-spacing: 0.5px;
+    .box-top-left {
+      grid-column: 1;
+      grid-row: 1;
     }
 
-    .section { margin-bottom: 22px; }
-    .section:last-child { margin-bottom: 0; }
-    
-    .section-title { 
-      font-weight: bold; 
-      font-size: 0.85rem; 
-      margin-bottom: 12px; 
-      color: #94a3b8; 
-      text-transform: uppercase; 
-      letter-spacing: 1px; 
+    .box-top-right {
+      grid-column: 3;
+      grid-row: 1;
     }
-    
-    .data-row { 
-      display: flex; 
-      justify-content: space-between; 
-      margin-bottom: 10px; 
-      font-size: 0.95rem; 
-      border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
-      padding-bottom: 4px;
+
+    .box-bottom-center {
+      grid-column: 2;
+      grid-row: 3;
+      justify-self: center;
+      width: 100%;
+      max-width: 580px;
     }
-    .data-row:last-child { border-bottom: none; }
-    
-    .data-label { color: #cbd5e1; }
-    .data-value { font-weight: 600; color: #fff; text-align: right; }
-    
+
+    .box-header {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+    }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+    }
+    .data-row:last-child { margin-bottom: 0; }
+
+    .data-label { color: #94a3b8; }
+    .data-val { font-weight: 600; color: #fff; }
+
+    /* Ablauf als horizontale Schrittanzeige im unteren Bereich */
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
     .status-ok { color: #4ade80; }
+    .status-active { color: #38bdf8; }
     .status-pending { color: #facc15; }
-    .status-active { color: #60a5fa; }
+
+    /* Test-Buttons unten am Bildschirm */
+    #debug-controls {
+      position: fixed;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+      display: flex;
+      gap: 12px;
+      background: rgba(0,0,0,0.6);
+      padding: 10px 15px;
+      border-radius: 12px;
+    }
+
+    button {
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      color: white;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.8; }
+    .btn-found { background-color: #3b82f6; }
+    .btn-lost { background-color: #ef4444; }
+
+    /* Responsives Verhalten für schmale Mobilgeräte */
+    @media (max-width: 800px) {
+      .hud-container {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow-y: auto;
+      }
+      .box-bottom-center { width: auto; }
+      .flow-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-  <!-- UI Overlay ist hier dauerhaft sichtbar zentriert -->
-  <div id="overlay">
-    <h2>Maschinen-Monitor</h2>
 
-    <div class="section">
-      <div class="section-title">Messungen</div>
-      <div class="data-row"><span class="data-label">TARA-Messung:</span> <span class="data-value">0.45 kg</span></div>
-      <div class="data-row"><span class="data-label">Brutto Messung:</span> <span class="data-value">2.10 kg</span></div>
-      <div class="data-row"><span class="data-label">Netto Gewicht:</span> <span class="data-value">1.65 kg</span></div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Ablauf</div>
-      <div class="data-row"><span class="data-label">RFID Start:</span> <span class="data-value status-ok">Erfolgreich</span></div>
-      <div class="data-row"><span class="data-label">TARA-Messung:</span> <span class="data-value status-ok">Abgeschlossen</span></div>
-      <div class="data-row"><span class="data-label">Ausgabe der Kugeln:</span> <span class="data-value status-active">Läuft...</span></div>
-      <div class="data-row"><span class="data-label">Brutto Messung:</span> <span class="data-value status-pending">Ausstehend</span></div>
-      <div class="data-row"><span class="data-label">Netto Gewicht:</span> <span class="data-value status-pending">Ausstehend</span></div>
-      <div class="data-row"><span class="data-label">RFID:</span> <span class="data-value status-active">Aktiv</span></div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Anlage</div>
-      <div class="data-row"><span class="data-label">Kugeln (Rot):</span> <span class="data-value">120 Stk.</span></div>
-      <div class="data-row"><span class="data-label">Kugeln (Blau):</span> <span class="data-value">85 Stk.</span></div>
-      <div class="data-row"><span class="data-label">Gewicht der Kugeln:</span> <span class="data-value">1.65 kg</span></div>
-    </div>
+  <!-- Sichtbare Buttons zum Testen auf dem Desktop -->
+  <div id="debug-controls">
+    <button class="btn-found" onclick="simulateMarkerFound()">Scan simulieren</button>
+    <button class="btn-lost" onclick="simulateMarkerLost()">Scan beenden</button>
   </div>
+
+  <!-- AR HUD mit 3 getrennten Boxen (Standardmäßig versteckt) -->
+  <div id="hud" class="hud-container hidden">
+    
+    <!-- Box 1: Messungen (Oben Links) -->
+    <div class="ar-box box-top-left">
+      <div class="box-header">Messungen</div>
+      <div class="data-row"><span class="data-label">TARA-Messung:</span><span class="data-val">0.45 kg</span></div>
+      <div class="data-row"><span class="data-label">Brutto Messung:</span><span class="data-val">2.10 kg</span></div>
+      <div class="data-row"><span class="data-label">Netto Gewicht:</span><span class="data-val">1.65 kg</span></div>
+    </div>
+
+    <!-- Box 3: Anlage (Oben Rechts) -->
+    <div class="ar-box box-top-right">
+      <div class="box-header">Anlage</div>
+      <div class="data-row"><span class="data-label">Menge (Rot):</span><span class="data-val">120 Stk.</span></div>
+      <div class="data-row"><span class="data-label">Menge (Blau):</span><span class="data-val">85 Stk.</span></div>
+      <div class="data-row"><span class="data-label">Gewicht Kugeln:</span><span class="data-val">1.65 kg</span></div>
+    </div>
+
+    <!-- Box 2: Ablauf (Unten Mitte) -->
+    <div class="ar-box box-bottom-center">
+      <div class="box-header">Prozess Ablauf</div>
+      <div class="flow-grid">
+        <div class="data-row"><span class="data-label">RFID Start:</span><span class="data-val status-ok">OK</span></div>
+        <div class="data-row"><span class="data-label">TARA:</span><span class="data-val status-ok">Erledigt</span></div>
+        <div class="data-row"><span class="data-label">Ausgabe:</span><span class="data-val status-active">Läuft...</span></div>
+        <div class="data-row"><span class="data-label">Brutto:</span><span class="data-val status-pending">Wartet</span></div>
+        <div class="data-row"><span class="data-label">Netto:</span><span class="data-val status-pending">Wartet</span></div>
+        <div class="data-row"><span class="data-label">RFID:</span><span class="data-val status-active">Aktiv</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- AR.js Szene[cite: 2] -->
+  <a-scene
+    vr-mode-ui="enabled: false"
+    renderer="logarithmicDepthBuffer: true"
+    embedded
+    arjs="sourceType: webcam; facingMode: environment; sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720; debugUIEnabled: false;">
+    
+    <!-- Hier wird die Komponente "markerhandler" aufgerufen, Marker ist hiro[cite: 2] -->
+    <a-marker preset="hiro" id="hiro-marker" markerhandler></a-marker>
+    
+    <a-entity camera></a-entity>
+  </a-scene>
+
 </body>
 </html>
