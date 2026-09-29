@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UI Vorschau - Industrie 4.0 Dashboard</title>
+  <style>
+    :root { 
+      color-scheme: dark; 
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+    }
+    body {
+      margin: 0;
+      /* Simulierter verschwommener Maschinen-Hintergrund anstatt Kamera */
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      background-size: cover;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Modernes AR-Dashboard (Sichtbar by Default) */
+    #overlay {
+      display: block; 
+      width: 90%;
+      max-width: 380px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: #f8fafc;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+
+    h2 { 
+      margin-top: 0; 
+      font-size: 1.4rem; 
+      border-bottom: 1px solid rgba(255,255,255,0.1); 
+      padding-bottom: 12px; 
+      color: #38bdf8; 
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+
+    .section { margin-bottom: 22px; }
+    .section:last-child { margin-bottom: 0; }
+    
+    .section-title { 
+      font-weight: bold; 
+      font-size: 0.85rem; 
+      margin-bottom: 12px; 
+      color: #94a3b8; 
+      text-transform: uppercase; 
+      letter-spacing: 1px; 
+    }
+    
+    .data-row { 
+      display: flex; 
+      justify-content: space-between; 
+      margin-bottom: 10px; 
+      font-size: 0.95rem; 
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+      padding-bottom: 4px;
+    }
+    .data-row:last-child { border-bottom: none; }
+    
+    .data-label { color: #cbd5e1; }
+    .data-value { font-weight: 600; color: #fff; text-align: right; }
+    
+    .status-ok { color: #4ade80; }
+    .status-pending { color: #facc15; }
+    .status-active { color: #60a5fa; }
+  </style>
+</head>
+<body>
+  <!-- UI Overlay ist hier dauerhaft sichtbar zentriert -->
+  <div id="overlay">
+    <h2>Maschinen-Monitor</h2>
+
+    <div class="section">
+      <div class="section-title">Messungen</div>
+      <div class="data-row"><span class="data-label">TARA-Messung:</span> <span class="data-value">0.45 kg</span></div>
+      <div class="data-row"><span class="data-label">Brutto Messung:</span> <span class="data-value">2.10 kg</span></div>
+      <div class="data-row"><span class="data-label">Netto Gewicht:</span> <span class="data-value">1.65 kg</span></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Ablauf</div>
+      <div class="data-row"><span class="data-label">RFID Start:</span> <span class="data-value status-ok">Erfolgreich</span></div>
+      <div class="data-row"><span class="data-label">TARA-Messung:</span> <span class="data-value status-ok">Abgeschlossen</span></div>
+      <div class="data-row"><span class="data-label">Ausgabe der Kugeln:</span> <span class="data-value status-active">Läuft...</span></div>
+      <div class="data-row"><span class="data-label">Brutto Messung:</span> <span class="data-value status-pending">Ausstehend</span></div>
+      <div class="data-row"><span class="data-label">Netto Gewicht:</span> <span class="data-value status-pending">Ausstehend</span></div>
+      <div class="data-row"><span class="data-label">RFID:</span> <span class="data-value status-active">Aktiv</span></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Anlage</div>
+      <div class="data-row"><span class="data-label">Kugeln (Rot):</span> <span class="data-value">120 Stk.</span></div>
+      <div class="data-row"><span class="data-label">Kugeln (Blau):</span> <span class="data-value">85 Stk.</span></div>
+      <div class="data-row"><span class="data-label">Gewicht der Kugeln:</span> <span class="data-value">1.65 kg</span></div>
+    </div>
+  </div>
+</body>
+</html>
