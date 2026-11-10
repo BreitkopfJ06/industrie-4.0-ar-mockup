@@ -5,38 +5,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Industrie 4.0 - AR HUD View</title>
   
-  <!-- A-Frame und AR.js einbinden[cite: 2] -->
+  <!-- A-Frame und AR.js einbinden -->
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
 
-  <!-- AR Event Listener Komponente (Sichere Variante für A-Frame) -->
+  <!-- AR Event Listener Komponente -->
   <script>
+    function setHudVisibility(visible) {
+      const hud = document.getElementById('hud');
+      const statusBadge = document.getElementById('scan-status');
+      
+      if (hud) {
+        if (visible) {
+          hud.classList.remove('hidden');
+          if (statusBadge) {
+            statusBadge.textContent = 'MARKER AKTIV (HUD EINGEBLENDET)';
+            statusBadge.classList.add('active');
+          }
+        } else {
+          hud.classList.add('hidden');
+          if (statusBadge) {
+            statusBadge.textContent = 'SUCHE HIRO-MARKER...';
+            statusBadge.classList.remove('active');
+          }
+        }
+      }
+    }
+
     AFRAME.registerComponent('markerhandler', {
       init: function () {
-        const hud = document.getElementById('hud');
-        
-        // Zeigt das HUD, wenn der Marker gescannt wird[cite: 2]
         this.el.addEventListener('markerFound', () => {
           console.log('Marker gefunden! Blende HUD ein.');
-          hud.classList.remove('hidden');
+          setHudVisibility(true);
         });
 
-        // Versteckt das HUD, wenn der Marker verloren geht[cite: 2]
         this.el.addEventListener('markerLost', () => {
           console.log('Marker verloren! Blende HUD aus.');
-          hud.classList.add('hidden');
+          setHudVisibility(false);
         });
       }
     });
 
-    // Reparierte globale Test-Funktionen für den Desktop (nutzt .emit)
+    // Globale Test-Funktionen für den Desktop
     window.simulateMarkerFound = () => {
-      document.getElementById('hiro-marker').emit('markerFound');
-    }
+      console.log('Simulation: Marker gefunden');
+      setHudVisibility(true);
+    };
     
     window.simulateMarkerLost = () => {
-      document.getElementById('hiro-marker').emit('markerLost');
-    }
+      console.log('Simulation: Marker verloren');
+      setHudVisibility(false);
+    };
   </script>
 
   <style>
@@ -44,20 +63,28 @@
       color-scheme: dark;
       font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
-      overflow: hidden; /* Verhindert Scrollbalken[cite: 2] */
+      overflow: hidden;
       background: #000;
       width: 100vw;
       height: 100vh;
     }
 
-    /* Kamera-/Canvas-Darstellung für AR.js[cite: 2] */
-    video, canvas {
+    /* Kamera-/Canvas-Darstellung für AR.js im Hintergrund halten */
+    .a-canvas, video {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
       width: 100vw !important;
       height: 100vh !important;
-      object-fit: contain !important; /* Weniger Zoom-Eindruck[cite: 2] */
-      z-index: 1;
+      object-fit: cover !important;
+      z-index: 1 !important;
     }
 
     /* Hilfsklasse zum Ausblenden vor dem Scan */
@@ -65,54 +92,84 @@
       display: none !important;
     }
 
+    /* Status-Anzeige oben Mitte */
+    #scan-status {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10001;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(250, 204, 21, 0.5);
+      color: #facc15;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      pointer-events: none;
+      backdrop-filter: blur(6px);
+      transition: all 0.3s ease;
+    }
+
+    #scan-status.active {
+      border-color: rgba(74, 222, 128, 0.6);
+      color: #4ade80;
+    }
+
     /* HUD Layout Container */
     .hud-container {
       position: fixed;
-      inset: 0;
-      z-index: 9999; /* Sehr hoch, damit es sicher über der Kamera liegt */
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
       display: grid;
-      grid-template-columns: 320px 1fr 320px;
+      grid-template-columns: minmax(260px, 320px) 1fr minmax(260px, 320px);
       grid-template-rows: auto 1fr auto;
       padding: 20px;
-      pointer-events: none; /* Klicks gehen durch die leere Fläche */
-      box-sizing: border-box;
-      animation: fadeIn 0.3s ease-out;
+      pointer-events: none;
+      animation: fadeIn 0.25s ease-out;
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
     }
 
     /* Einzelne AR-Boxen */
     .ar-box {
       pointer-events: auto;
-      background: rgba(15, 23, 42, 0.78);
-      border: 1px solid rgba(56, 189, 248, 0.35);
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.5);
       border-radius: 12px;
       padding: 16px 20px;
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       color: #f8fafc;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
     }
 
     .box-top-left {
       grid-column: 1;
       grid-row: 1;
+      align-self: start;
     }
 
     .box-top-right {
       grid-column: 3;
       grid-row: 1;
+      align-self: start;
     }
 
     .box-bottom-center {
-      grid-column: 2;
+      grid-column: 1 / 4;
       grid-row: 3;
       justify-self: center;
       width: 100%;
-      max-width: 580px;
+      max-width: 620px;
+      margin-bottom: 70px; /* Platz für die Debug-Buttons lassen */
     }
 
     .box-header {
@@ -121,7 +178,7 @@
       color: #38bdf8;
       text-transform: uppercase;
       letter-spacing: 1px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
       padding-bottom: 6px;
       margin-bottom: 10px;
     }
@@ -141,7 +198,7 @@
     .flow-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
+      gap: 12px 20px;
     }
 
     .status-ok { color: #4ade80; }
@@ -151,20 +208,21 @@
     /* Test-Buttons unten am Bildschirm */
     #debug-controls {
       position: fixed;
-      bottom: 120px;
+      bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 10000;
       display: flex;
       gap: 12px;
-      background: rgba(0,0,0,0.6);
-      padding: 10px 15px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 8px 12px;
       border-radius: 12px;
     }
 
     button {
-      padding: 10px 16px;
-      font-size: 14px;
+      padding: 8px 14px;
+      font-size: 13px;
       font-weight: bold;
       border: none;
       border-radius: 8px;
@@ -172,24 +230,35 @@
       color: white;
       transition: opacity 0.2s;
     }
-    button:hover { opacity: 0.8; }
+    button:hover { opacity: 0.85; }
     .btn-found { background-color: #3b82f6; }
     .btn-lost { background-color: #ef4444; }
 
-    /* Responsives Verhalten für schmale Mobilgeräte */
-    @media (max-width: 800px) {
+    /* Responsives Verhalten für schmale Fenster (z.B. Handy oder offene F12-Konsole) */
+    @media (max-width: 900px) {
       .hud-container {
         display: flex;
         flex-direction: column;
+        justify-content: flex-start;
+        padding-top: 55px;
+        padding-bottom: 85px;
         gap: 12px;
         overflow-y: auto;
       }
-      .box-bottom-center { width: auto; }
-      .flow-grid { grid-template-columns: 1fr; }
+      .box-bottom-center {
+        margin-bottom: 0;
+        max-width: 100%;
+      }
+      .flow-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
     }
   </style>
 </head>
 <body>
+
+  <!-- Status-Indikator oben Mitte -->
+  <div id="scan-status">SUCHE HIRO-MARKER...</div>
 
   <!-- Sichtbare Buttons zum Testen auf dem Desktop -->
   <div id="debug-controls">
@@ -231,15 +300,17 @@
 
   </div>
 
-  <!-- AR.js Szene[cite: 2] -->
+  <!-- AR.js Szene -->
   <a-scene
     vr-mode-ui="enabled: false"
     renderer="logarithmicDepthBuffer: true"
     embedded
-    arjs="sourceType: webcam; facingMode: environment; sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720; debugUIEnabled: false;">
+    arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false;">
     
-    <!-- Hier wird die Komponente "markerhandler" aufgerufen, Marker ist hiro[cite: 2] -->
-    <a-marker preset="hiro" id="hiro-marker" markerhandler></a-marker>
+    <!-- Hiro Marker mit zusätzlichem 3D-Rahmen als visuelles Feedback -->
+    <a-marker preset="hiro" id="hiro-marker" markerhandler>
+      <a-plane position="0 0 0" rotation="-90 0 0" width="1" height="1" color="#38bdf8" material="opacity: 0.3; transparent: true;"></a-plane>
+    </a-marker>
     
     <a-entity camera></a-entity>
   </a-scene>
