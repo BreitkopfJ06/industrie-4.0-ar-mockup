@@ -5,35 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Industrie 4.0 AR Dashboard</title>
   
+  <!-- A-Frame und AR.js (Kamerabild) wieder eingebunden -->
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
+  
+  <!-- MQTT.js -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-
-  <script>
-    AFRAME.registerComponent('markerhandler', {
-      init: function () {
-        const overlay = document.getElementById('overlay');
-        
-        this.el.addEventListener('markerFound', () => {
-          console.log('Marker gefunden! Blende Dashboard ein.');
-          overlay.style.display = 'block';
-        });
-
-        this.el.addEventListener('markerLost', () => {
-          console.log('Marker verloren! Blende Dashboard aus.');
-          overlay.style.display = 'none';
-        });
-      }
-    });
-
-    window.simulateMarkerFound = () => {
-      document.getElementById('hiro-marker').emit('markerFound');
-    }
-    
-    window.simulateMarkerLost = () => {
-      document.getElementById('hiro-marker').emit('markerLost');
-    }
-  </script>
 
   <style>
     :root { 
@@ -42,12 +19,13 @@
     }
     body {
       margin: 0;
-      overflow: hidden;
+      overflow: hidden; /* Wichtig für das Kamerabild */
       background-color: #000;
     }
 
+    /* Das Dashboard (jetzt standardmäßig auf display: block gesetzt) */
     #overlay {
-      display: none; 
+      display: block; /* <- Hier geändert: Das Menü ist immer sichtbar */
       position: fixed;
       top: 50%;
       left: 50%;
@@ -60,40 +38,13 @@
       padding: 24px;
       border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 16px;
-      background: rgba(15, 23, 42, 0.85);
+      background: rgba(15, 23, 42, 0.85); /* Leicht transparent für den AR-Effekt */
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       color: #f8fafc;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-      animation: fadeIn 0.3s ease-out;
+      animation: fadeIn 0.5s ease-out;
     }
-
-    #debug-controls {
-      position: fixed;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10000;
-      display: flex;
-      gap: 12px;
-      background: rgba(0,0,0,0.6);
-      padding: 10px 15px;
-      border-radius: 12px;
-    }
-
-    button {
-      padding: 10px 16px;
-      font-size: 14px;
-      font-weight: bold;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      color: white;
-      transition: opacity 0.2s;
-    }
-    button:hover { opacity: 0.8; }
-    .btn-found { background-color: #3b82f6; }
-    .btn-lost { background-color: #ef4444; }
 
     @keyframes fadeIn {
       from { opacity: 0; transform: translate(-50%, -45%); }
@@ -136,7 +87,6 @@
     .data-value { font-weight: 600; color: #fff; text-align: right; }
     
     .status-ok { color: #4ade80; }
-    .status-pending { color: #facc15; }
     .status-active { color: #60a5fa; }
     
     /* Dynamische Farbgebung für kritische Vibrationswerte */
@@ -144,10 +94,11 @@
     
     @keyframes pulse {
       0% { opacity: 1; }
-      50% { opacity: 0.5; }
+      50% { opacity: 0.6; }
       100% { opacity: 1; }
     }
 
+    /* Das Kamerabild auf volle Größe skalieren */
     video, canvas {
       width: 100vw !important;
       height: 100vh !important;
@@ -156,15 +107,11 @@
   </style>
 </head>
 <body>
-  <div id="debug-controls">
-    <button class="btn-found" onclick="simulateMarkerFound()">Scan simulieren</button>
-    <button class="btn-lost" onclick="simulateMarkerLost()">Scan beenden</button>
-  </div>
 
+  <!-- Das Dashboard / Overlay -->
   <div id="overlay">
     <h2>Maschinen-Monitor</h2>
 
-    <!-- Neuer Bereich für das Power House -->
     <div class="section">
       <div class="section-title">Power House Sensorik</div>
       <div class="data-row">
@@ -173,24 +120,25 @@
       </div>
       <div class="data-row">
         <span class="data-label">Status:</span> 
-        <span class="data-value status-active" id="val-status">Aktiv</span>
+        <span class="data-value status-active" id="val-status">Verbinde...</span>
       </div>
     </div>
 
+    <!-- Neuer Zeitstempel (optional) -->
     <div class="section">
-      <div class="section-title">Messungen (Archiv)</div>
-      <div class="data-row"><span class="data-label">TARA-Messung:</span> <span class="data-value" id="val-tara">0.45 kg</span></div>
-      <div class="data-row"><span class="data-label">Netto Gewicht:</span> <span class="data-value" id="val-netto">1.65 kg</span></div>
+      <div class="section-title">System</div>
+      <div class="data-row"><span class="data-label">Letztes Update:</span> <span class="data-value" id="val-time">-</span></div>
     </div>
   </div>
 
+  <!-- AR.js Szene OHNE a-marker Tag -->
   <a-scene
     vr-mode-ui="enabled: false"
     renderer="logarithmicDepthBuffer: true"
     embedded
-    arjs="sourceType: webcam; facingMode: environment; sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720; debugUIEnabled: false;">
+    arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false;">
     
-    <a-marker preset="hiro" id="hiro-marker" markerhandler></a-marker>
+    <!-- Nur noch die Kamera-Entität (startet den Live-Feed) -->
     <a-entity camera></a-entity>
   </a-scene>
 
@@ -209,8 +157,10 @@
 
     client.on('connect', () => {
       console.log('Erfolgreich mit MQTT Broker verbunden!');
+      document.getElementById('val-status').innerText = 'Online / Warte';
+      document.getElementById('val-status').className = 'data-value status-active';
       
-      // Abonniere das neue spezifische Topic
+      // Das Topic abonnieren
       client.subscribe('/bbk-lf7/21/power-house/vibration');
     });
 
@@ -222,10 +172,14 @@
         const vibElement = document.getElementById('val-vibration');
         const statusElement = document.getElementById('val-status');
         
-        // Wert direkt im Dashboard anzeigen (Einheit kann je nach Sensor angepasst werden, hier generisch)
+        // Wert direkt aktualisieren
         vibElement.innerText = payload;
 
-        // Optional: Logik für visuelle Warnungen bei hohen Werten (Beispielhaft > 10)
+        // Zeitstempel aktualisieren (hilft zu sehen, dass die Verbindung "lebt")
+        const now = new Date();
+        document.getElementById('val-time').innerText = now.toLocaleTimeString('de-DE');
+
+        // Optional: Wenn der Vibrationswert über 10 ist, wird es rot
         const numericValue = parseFloat(payload);
         if (!isNaN(numericValue) && numericValue > 10.0) {
           vibElement.classList.add('val-critical');
@@ -241,6 +195,8 @@
 
     client.on('error', (err) => {
       console.error('MQTT Verbindungsfehler: ', err);
+      document.getElementById('val-status').innerText = 'Fehler!';
+      document.getElementById('val-status').className = 'data-value val-critical';
     });
   </script>
 </body>
