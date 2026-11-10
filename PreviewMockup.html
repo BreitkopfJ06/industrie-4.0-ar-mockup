@@ -3,71 +3,488 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Industrie 4.0 - AR HUD View (Ohne Kamera)</title>
- 
-  <!-- A-Frame und AR.js einbinden -->
+  <title>Industrie 4.0 - Koffer 21 - AR HUD</title>
+  
+  <!-- A-Frame und AR.js -->
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
- 
-  <!-- AR Event Listener Komponente -->
+
+  <!-- MQTT.js und Chart.js -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <script>
     AFRAME.registerComponent('markerhandler', {
       init: function () {
         const hud = document.getElementById('hud');
- 
         this.el.addEventListener('markerFound', () => {
-          console.log('Marker gefunden! Blende HUD ein.');
           hud.classList.remove('hidden');
         });
- 
         this.el.addEventListener('markerLost', () => {
-          console.log('Marker verloren! Blende HUD aus.');
           hud.classList.add('hidden');
         });
       }
     });
- 
-    window.simulateMarkerFound = () => {
-      document.getElementById('hiro-marker').emit('markerFound');
-    }
- 
-    window.simulateMarkerLost = () => {
-      document.getElementById('hiro-marker').emit('markerLost');
-    }
+
+    window.simulateMarkerFound = () => document.getElementById('hiro-marker').emit('markerFound');
+    window.simulateMarkerLost = () => document.getElementById('hiro-marker').emit('markerLost');
   </script>
- 
-  <!-- WebSocket Verbindung zu Node-RED auf dem Raspberry Pi -->
+
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    video, canvas.a-canvas {
+      width: 100vw !important;
+      height: 100vh !important;
+      object-fit: contain !important;
+      z-index: 1;
+    }
+
+    .hidden { display: none !important; }
+
+    /* HUD Layout Container */
+    .hud-container {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: grid;
+      grid-template-columns: 350px 1fr 350px;
+      grid-template-rows: auto 1fr auto;
+      padding: 20px;
+      padding-bottom: 90px;
+      pointer-events: none;
+      box-sizing: border-box;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .ar-box {
+      pointer-events: auto;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      border-radius: 12px;
+      padding: 16px 20px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #f8fafc;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    .box-top-left { grid-column: 1; grid-row: 1; }
+    .box-top-right { grid-column: 3; grid-row: 1; }
+    .box-bottom-center {
+      grid-column: 2;
+      grid-row: 3;
+      justify-self: center;
+      width: 100%;
+      max-width: 620px;
+    }
+
+    .box-header {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+    }
+    .data-row:last-child { margin-bottom: 0; }
+    .data-label { color: #94a3b8; }
+    .data-val { font-weight: 600; color: #fff; }
+
+    .status-ok { color: #4ade80; }
+    .status-active { color: #38bdf8; }
+    .status-pending { color: #facc15; }
+    .status-err { color: #ef4444; }
+
+    .chart-wrapper {
+      position: relative;
+      height: 160px;
+      width: 100%;
+    }
+
+    /* Steuerleiste unten */
+    #debug-controls {
+      position: fixed;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(255,255,255,0.15);
+      padding: 8px 12px;
+      border-radius: 12px;
+      width: max-content;
+      max-width: 95vw;
+    }
+
+    input.url-input {
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      width: 240px;
+    }
+
+    button {
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: bold;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      color: white;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    .btn-found { background-color: #3b82f6; }
+    .btn-lost { background-color: #ef4444; }
+    .btn-save { background-color: #10b981; }
+    .btn-refresh { background-color: #0284c7; padding: 4px 8px; font-size: 11px; }
+
+    @media (max-width: 950px) {
+      .hud-container {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow-y: auto;
+        padding-bottom: 120px;
+      }
+      .box-bottom-center { width: auto; max-width: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Steuerleiste: Scan-Simulation & Node-RED Tunnel-URL -->
+  <div id="debug-controls">
+    <input type="text" id="tunnel-url" class="url-input" placeholder="https://eure-id.lhr.life">
+    <button class="btn-save" onclick="saveTunnelUrl()">Verbinden</button>
+    <button class="btn-found" onclick="simulateMarkerFound()">HUD Ein</button>
+    <button class="btn-lost" onclick="simulateMarkerLost()">HUD Aus</button>
+  </div>
+
+  <!-- AR HUD -->
+  <div id="hud" class="hud-container hidden">
+    
+    <!-- Box 1: Live-Messungen (WebSocket & MQTT Koffer 21) -->
+    <div class="ar-box box-top-left">
+      <div class="box-header">
+        <span>Live Vibration (Koffer 21)</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Sensor:</span>
+        <span class="data-val">P-101.Vibration</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">WebSocket (Live):</span>
+        <span id="ws-value" class="data-val status-active">-- mm/s</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">MQTT (Koffer 21):</span>
+        <span id="mqtt-value" class="data-val status-ok">-- mm/s</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Verbindung:</span>
+        <span class="data-val">
+          <span id="ws-status" class="status-pending">WS...</span> | 
+          <span id="mqtt-status" class="status-pending">MQTT...</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Box 2: SQLite Datenbank (REST API) & Fremde Gruppen -->
+    <div class="ar-box box-top-right">
+      <div class="box-header">
+        <span>SQLite DB (REST API)</span>
+        <button class="btn-refresh" onclick="fetchRestData()">Laden</button>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Letzter DB-Wert:</span>
+        <span id="rest-latest" class="data-val">-- mm/s</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Ø Letzte 5 Min:</span>
+        <span id="rest-avg" class="data-val status-active">-- mm/s</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Datensätze (5 Min):</span>
+        <span id="rest-count" class="data-val">-- Einträge</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Andere Koffer (MQTT):</span>
+        <span id="mqtt-foreign" class="data-val status-pending">Warte...</span>
+      </div>
+    </div>
+
+    <!-- Box 3: Historische Daten (Chart.js) -->
+    <div class="ar-box box-bottom-center">
+      <div class="box-header">
+        <span>Historischer Verlauf (Letzte 5 Minuten)</span>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="vibrationChart"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- AR.js Szene -->
+  <a-scene
+    vr-mode-ui="enabled: false"
+    renderer="logarithmicDepthBuffer: true"
+    embedded
+    arjs="sourceType: webcam; facingMode: environment; sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720; debugUIEnabled: false;">
+    <a-marker preset="hiro" id="hiro-marker" markerhandler></a-marker>
+    <a-entity camera></a-entity>
+  </a-scene>
+
   <script>
-    // ⚠️ HIER ANPASSEN: Ersetze die IP-Adresse mit der lokalen IP oder Domain deines Raspberry Pi
-    const PI_IP = "192.168.178.50";
-    const ws = new WebSocket(`ws://${PI_IP}:1880/ws/ar-data`);
- 
-    ws.onopen = () => {
-      console.log("WebSocket-Verbindung zu Node-RED erfolgreich aufgebaut!");
-    };
- 
-    ws.onmessage = (event) => {
+    // =========================================================================
+    // 1. KONFIGURATION FÜR KOFFER 21
+    // =========================================================================
+    const KOFFER_NR = "21";
+    const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
+    const TOPIC_OWN = `/bbk-lf7/${KOFFER_NR}/power-house/vibration`;
+    const TOPIC_ALL = `/bbk-lf7/+/power-house/vibration`;
+
+    let nodeRedHttpUrl = localStorage.getItem('nodeRedUrl') || "http://localhost:1880";
+    document.getElementById('tunnel-url').value = nodeRedHttpUrl;
+
+    let wsConnection = null;
+
+    function saveTunnelUrl() {
+      let val = document.getElementById('tunnel-url').value.trim().replace(/\/$/, "");
+      if (!val.startsWith("http")) val = "https://" + val;
+      nodeRedHttpUrl = val;
+      localStorage.setItem('nodeRedUrl', nodeRedHttpUrl);
+      initWebSocket();
+      fetchRestData();
+    }
+
+    function parseVibrationValue(raw) {
+      if (raw === null || raw === undefined) return NaN;
       try {
-        const data = JSON.parse(event.data);
-        console.log("Neue Daten empfangen:", data);
- 
-        // Vibrationswert aktualisieren und Schwellwert prüfen (z.B. ab 4.5 rot)
-        if (data.vibration !== undefined) {
-          const vibElement = document.getElementById('val-vibration');
-          vibElement.innerText = `${data.vibration} mm/s`;
- 
-          if (data.vibration > 4.5) {
-            vibElement.className = "data-val";
-            vibElement.style.color = "#ef4444"; // Alarm-Rot
-          } else {
-            vibElement.className = "data-val status-ok";
-            vibElement.style.color = ""; // Grün / Normal
-          }
+        const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (typeof data === "number") return data;
+        if (data && typeof data === "object") {
+          const val = data.vibration_value ?? data.avg_vibration ?? data.value ?? data.payload;
+          if (val !== undefined && val !== null) return Number(val);
         }
- 
-        // Andere Werte optional aktualisieren, falls mitgesendet
-        if (data.tara !== undefined) document.getElementById('val-tara').innerText = data.tara;
-        if (data.netto !== undefined) document.getElementById('val-netto').innerText = data.netto;
-        if (data.mengeRot !== undefined) document.getElementById('val-menge-rot').innerText = data.mengeRot;
-        if (data.mengeBlau !== undefined) document.getElementById('val-menge-blau').innerText = data.mengeBlau;
-        if (data.gewichtKugeln !== undefined) document.getElementById('val-gewicht-kugeln
+        return Number(raw);
+      } catch (e) {
+        return parseFloat(raw);
+      }
+    }
+
+    // =========================================================================
+    // 2. CHART.JS INITIALISIERUNG
+    // =========================================================================
+    const ctx = document.getElementById('vibrationChart').getContext('2d');
+    const vibrationChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Vibration (mm/s)',
+          data: [],
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56, 189, 248, 0.15)',
+          borderWidth: 2,
+          pointRadius: 2,
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#94a3b8', maxTicksLimit: 6 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+        }
+      }
+    });
+
+    function addLivePointToChart(value) {
+      if (isNaN(value)) return;
+      const timeStr = new Date().toLocaleTimeString('de-DE');
+      vibrationChart.data.labels.push(timeStr);
+      vibrationChart.data.datasets[0].data.push(value);
+      if (vibrationChart.data.labels.length > 35) {
+        vibrationChart.data.labels.shift();
+        vibrationChart.data.datasets[0].data.shift();
+      }
+      vibrationChart.update();
+    }
+
+    // =========================================================================
+    // 3. WEBSOCKET (Passt ws:// bzw. wss:// automatisch an die URL an)
+    // =========================================================================
+    function initWebSocket() {
+      const wsStatus = document.getElementById('ws-status');
+      const wsValue = document.getElementById('ws-value');
+
+      if (wsConnection) {
+        wsConnection.onclose = null;
+        wsConnection.close();
+      }
+
+      const wsUrl = nodeRedHttpUrl.replace(/^http/, 'ws') + "/ws/vibration";
+      wsStatus.textContent = "WS...";
+      wsStatus.className = "status-pending";
+
+      try {
+        wsConnection = new WebSocket(wsUrl);
+
+        wsConnection.onopen = () => {
+          wsStatus.textContent = "WS OK";
+          wsStatus.className = "status-ok";
+        };
+
+        wsConnection.onmessage = (event) => {
+          const val = parseVibrationValue(event.data);
+          if (!isNaN(val)) {
+            wsValue.textContent = val.toFixed(3) + " mm/s";
+            addLivePointToChart(val);
+          }
+        };
+
+        wsConnection.onerror = () => {
+          wsStatus.textContent = "WS Fehler";
+          wsStatus.className = "status-err";
+        };
+
+        wsConnection.onclose = () => {
+          wsStatus.textContent = "WS Getrennt";
+          wsStatus.className = "status-pending";
+        };
+      } catch (err) {
+        wsStatus.textContent = "WS Blockiert";
+        wsStatus.className = "status-err";
+      }
+    }
+
+    // =========================================================================
+    // 4. MQTT (Funktioniert auf GitHub Pages sofort über HiveMQ WSS)
+    // =========================================================================
+    function initMQTT() {
+      const mqttStatus = document.getElementById('mqtt-status');
+      const mqttValue = document.getElementById('mqtt-value');
+      const mqttForeign = document.getElementById('mqtt-foreign');
+
+      const client = mqtt.connect(MQTT_BROKER);
+
+      client.on('connect', () => {
+        mqttStatus.textContent = "MQTT OK";
+        mqttStatus.className = "status-ok";
+        client.subscribe([TOPIC_OWN, TOPIC_ALL]);
+      });
+
+      client.on('message', (topic, message) => {
+        const textMsg = message.toString();
+        const numVal = parseVibrationValue(textMsg);
+        const formatted = !isNaN(numVal) ? numVal.toFixed(3) + " mm/s" : textMsg;
+
+        if (topic === TOPIC_OWN) {
+          mqttValue.textContent = formatted;
+        } else {
+          const parts = topic.split('/');
+          const group = parts[2] || '?';
+          mqttForeign.textContent = `Koffer ${group}: ${formatted}`;
+          mqttForeign.className = "data-val status-active";
+        }
+      });
+
+      client.on('error', () => {
+        mqttStatus.textContent = "MQTT Fehler";
+        mqttStatus.className = "status-err";
+      });
+    }
+
+    // =========================================================================
+    // 5. REST-API (SQLite Abfragen von Node-RED)
+    // =========================================================================
+    async function fetchRestData() {
+      // 1. Letzter Wert
+      try {
+        const res1 = await fetch(`${nodeRedHttpUrl}/api/vibration/latest`);
+        const data1 = await res1.json();
+        const row1 = Array.isArray(data1) ? data1[0] : data1;
+        const val1 = parseVibrationValue(row1);
+        if (!isNaN(val1)) {
+          document.getElementById('rest-latest').textContent = val1.toFixed(3) + " mm/s";
+        }
+      } catch (e) {}
+
+      // 2. Durchschnitt der letzten 5 Minuten
+      try {
+        const res2 = await fetch(`${nodeRedHttpUrl}/api/vibration/average-5-mins`);
+        const data2 = await res2.json();
+        const row2 = Array.isArray(data2) ? data2[0] : data2;
+        const avgVal = parseVibrationValue(row2);
+        if (!isNaN(avgVal)) {
+          document.getElementById('rest-avg').textContent = avgVal.toFixed(3) + " mm/s";
+        }
+      } catch (e) {}
+
+      // 3. Verlauf der letzten 5 Minuten
+      try {
+        const res3 = await fetch(`${nodeRedHttpUrl}/api/vibration/last-5-mins`);
+        const data3 = await res3.json();
+        if (Array.isArray(data3) && data3.length > 0) {
+          document.getElementById('rest-count').textContent = `${data3.length} Einträge`;
+          
+          vibrationChart.data.labels = data3.map(item => {
+            // SQLite liefert UTC ("YYYY-MM-DD HH:MM:SS"), 'Z' anhängen für korrekte lokale Uhrzeit
+            const ts = item.timestamp ? item.timestamp.replace(' ', 'T') + 'Z' : Date.now();
+            return new Date(ts).toLocaleTimeString('de-DE');
+          });
+          vibrationChart.data.datasets[0].data = data3.map(item => parseVibrationValue(item));
+          vibrationChart.update();
+        }
+      } catch (e) {}
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMQTT();
+      initWebSocket();
+      fetchRestData();
+      setInterval(fetchRestData, 10000);
+    });
+  </script>
+</body>
+</html>
