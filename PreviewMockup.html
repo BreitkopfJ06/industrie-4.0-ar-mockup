@@ -4,59 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Industrie 4.0 - AR HUD View</title>
-  
-  <!-- A-Frame und AR.js einbinden -->
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
-
-  <!-- AR Event Listener Komponente -->
-  <script>
-    function setHudVisibility(visible) {
-      const hud = document.getElementById('hud');
-      const statusBadge = document.getElementById('scan-status');
-      
-      if (hud) {
-        if (visible) {
-          hud.classList.remove('hidden');
-          if (statusBadge) {
-            statusBadge.textContent = 'MARKER AKTIV (HUD EINGEBLENDET)';
-            statusBadge.classList.add('active');
-          }
-        } else {
-          hud.classList.add('hidden');
-          if (statusBadge) {
-            statusBadge.textContent = 'SUCHE HIRO-MARKER...';
-            statusBadge.classList.remove('active');
-          }
-        }
-      }
-    }
-
-    AFRAME.registerComponent('markerhandler', {
-      init: function () {
-        this.el.addEventListener('markerFound', () => {
-          console.log('Marker gefunden! Blende HUD ein.');
-          setHudVisibility(true);
-        });
-
-        this.el.addEventListener('markerLost', () => {
-          console.log('Marker verloren! Blende HUD aus.');
-          setHudVisibility(false);
-        });
-      }
-    });
-
-    // Globale Test-Funktionen für den Desktop
-    window.simulateMarkerFound = () => {
-      console.log('Simulation: Marker gefunden');
-      setHudVisibility(true);
-    };
-    
-    window.simulateMarkerLost = () => {
-      console.log('Simulation: Marker verloren');
-      setHudVisibility(false);
-    };
-  </script>
 
   <style>
     :root {
@@ -71,84 +18,45 @@
     body {
       margin: 0;
       overflow: hidden;
-      background: #000;
+      background: #0f172a;
       width: 100vw;
       height: 100vh;
     }
 
-    /* Kamera-/Canvas-Darstellung für AR.js im Hintergrund halten */
-    .a-canvas, video {
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      object-fit: cover !important;
-      z-index: 1 !important;
-    }
-
-    /* Hilfsklasse zum Ausblenden vor dem Scan */
-    .hidden {
-      display: none !important;
-    }
-
-    /* Status-Anzeige oben Mitte */
-    #scan-status {
-      position: fixed;
-      top: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10001;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(250, 204, 21, 0.5);
-      color: #facc15;
-      padding: 6px 16px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 700;
-      letter-spacing: 1px;
-      pointer-events: none;
-      backdrop-filter: blur(6px);
-      transition: all 0.3s ease;
-    }
-
-    #scan-status.active {
-      border-color: rgba(74, 222, 128, 0.6);
-      color: #4ade80;
-    }
-
-    /* HUD Layout Container */
-    .hud-container {
+    /* Kamera-Hintergrund */
+    #camera-stream {
       position: fixed;
       top: 0;
       left: 0;
       width: 100vw;
       height: 100vh;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+    /* HUD Layout Container (dauerhaft sichtbar) */
+    .hud-container {
+      position: fixed;
+      inset: 0;
       z-index: 9999;
       display: grid;
       grid-template-columns: minmax(260px, 320px) 1fr minmax(260px, 320px);
       grid-template-rows: auto 1fr auto;
       padding: 20px;
       pointer-events: none;
-      animation: fadeIn 0.25s ease-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: scale(0.98); }
-      to { opacity: 1; transform: scale(1); }
     }
 
     /* Einzelne AR-Boxen */
     .ar-box {
       pointer-events: auto;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(56, 189, 248, 0.5);
+      background: rgba(15, 23, 42, 0.78);
+      border: 1px solid rgba(56, 189, 248, 0.35);
       border-radius: 12px;
       padding: 16px 20px;
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       color: #f8fafc;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
     }
 
     .box-top-left {
@@ -168,8 +76,7 @@
       grid-row: 3;
       justify-self: center;
       width: 100%;
-      max-width: 620px;
-      margin-bottom: 70px; /* Platz für die Debug-Buttons lassen */
+      max-width: 580px;
     }
 
     .box-header {
@@ -178,7 +85,7 @@
       color: #38bdf8;
       text-transform: uppercase;
       letter-spacing: 1px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       padding-bottom: 6px;
       margin-bottom: 10px;
     }
@@ -205,69 +112,26 @@
     .status-active { color: #38bdf8; }
     .status-pending { color: #facc15; }
 
-    /* Test-Buttons unten am Bildschirm */
-    #debug-controls {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10000;
-      display: flex;
-      gap: 12px;
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      padding: 8px 12px;
-      border-radius: 12px;
-    }
-
-    button {
-      padding: 8px 14px;
-      font-size: 13px;
-      font-weight: bold;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      color: white;
-      transition: opacity 0.2s;
-    }
-    button:hover { opacity: 0.85; }
-    .btn-found { background-color: #3b82f6; }
-    .btn-lost { background-color: #ef4444; }
-
-    /* Responsives Verhalten für schmale Fenster (z.B. Handy oder offene F12-Konsole) */
-    @media (max-width: 900px) {
+    /* Responsives Verhalten für schmale Mobilgeräte */
+    @media (max-width: 800px) {
       .hud-container {
         display: flex;
         flex-direction: column;
-        justify-content: flex-start;
-        padding-top: 55px;
-        padding-bottom: 85px;
         gap: 12px;
         overflow-y: auto;
       }
-      .box-bottom-center {
-        margin-bottom: 0;
-        max-width: 100%;
-      }
-      .flow-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
+      .box-bottom-center { width: 100%; max-width: none; }
+      .flow-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Status-Indikator oben Mitte -->
-  <div id="scan-status">SUCHE HIRO-MARKER...</div>
+  <!-- Kamera-Feed im Hintergrund -->
+  <video id="camera-stream" autoplay playsinline muted></video>
 
-  <!-- Sichtbare Buttons zum Testen auf dem Desktop -->
-  <div id="debug-controls">
-    <button class="btn-found" onclick="simulateMarkerFound()">Scan simulieren</button>
-    <button class="btn-lost" onclick="simulateMarkerLost()">Scan beenden</button>
-  </div>
-
-  <!-- AR HUD mit 3 getrennten Boxen (Standardmäßig versteckt) -->
-  <div id="hud" class="hud-container hidden">
+  <!-- AR HUD mit 3 getrennten Boxen (Permanent eingeblendet) -->
+  <div id="hud" class="hud-container">
     
     <!-- Box 1: Messungen (Oben Links) -->
     <div class="ar-box box-top-left">
@@ -300,20 +164,19 @@
 
   </div>
 
-  <!-- AR.js Szene -->
-  <a-scene
-    vr-mode-ui="enabled: false"
-    renderer="logarithmicDepthBuffer: true"
-    embedded
-    arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false;">
-    
-    <!-- Hiro Marker mit zusätzlichem 3D-Rahmen als visuelles Feedback -->
-    <a-marker preset="hiro" id="hiro-marker" markerhandler>
-      <a-plane position="0 0 0" rotation="-90 0 0" width="1" height="1" color="#38bdf8" material="opacity: 0.3; transparent: true;"></a-plane>
-    </a-marker>
-    
-    <a-entity camera></a-entity>
-  </a-scene>
+  <!-- Startet die Kamera im Hintergrund (falls vorhanden) -->
+  <script>
+    const video = document.getElementById('camera-stream');
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(stream => {
+          video.srcObject = stream;
+        })
+        .catch(err => {
+          console.warn('Kamera nicht verfügbar oder Zugriff verweigert – zeige HUD auf dunklem Hintergrund.', err);
+        });
+    }
+  </script>
 
 </body>
 </html>
