@@ -17,17 +17,36 @@
     AFRAME.registerComponent('markerhandler', {
       init: function () {
         const hud = document.getElementById('hud');
+        const badge = document.getElementById('ar-badge');
+        
         this.el.addEventListener('markerFound', () => {
           hud.classList.remove('hidden');
+          if (badge) {
+            badge.textContent = "Marker: GEFUNDEN";
+            badge.style.background = "#10b981";
+          }
         });
+
         this.el.addEventListener('markerLost', () => {
-          hud.classList.add('hidden');
+          if (badge) {
+            badge.textContent = "Marker: Kein Scan";
+            badge.style.background = "#475569";
+          }
+          // Falls das HUD nur bei aktivem Kamera-Scan sichtbar sein soll,
+          // entferne die zwei Schrägstriche (//) in der nächsten Zeile:
+          // hud.classList.add('hidden');
         });
       }
     });
 
-    window.simulateMarkerFound = () => document.getElementById('hiro-marker').emit('markerFound');
-    window.simulateMarkerLost = () => document.getElementById('hiro-marker').emit('markerLost');
+    window.toggleHud = (show) => {
+      const hud = document.getElementById('hud');
+      if (show) {
+        hud.classList.remove('hidden');
+      } else {
+        hud.classList.add('hidden');
+      }
+    };
   </script>
 
   <style>
@@ -35,53 +54,114 @@
       color-scheme: dark;
       font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
-    body {
-      margin: 0;
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
       overflow: hidden;
-      background: #000;
-      width: 100vw;
-      height: 100vh;
-    }
-
-    video, canvas.a-canvas {
+      background: #0f172a;
       width: 100vw !important;
       height: 100vh !important;
-      object-fit: contain !important;
-      z-index: 1;
+    }
+
+    /* Kamera-Hintergrund ganz nach hinten zwingen */
+    video, canvas.a-canvas, a-scene {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      object-fit: cover !important;
+      z-index: 1 !important;
     }
 
     .hidden { display: none !important; }
 
-    /* HUD Layout Container */
+    /* STEUERLEISTE GANZ OBEN (Garantiert immer sichtbar!) */
+    #top-bar {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      z-index: 2147483647 !important; /* Maximal möglicher Z-Index im Browser */
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(15, 23, 42, 0.95);
+      border-bottom: 2px solid #38bdf8;
+      padding: 10px 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+    }
+
+    .bar-title {
+      font-weight: 800;
+      color: #38bdf8;
+      font-size: 14px;
+      margin-right: 6px;
+    }
+
+    input.url-input {
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid #38bdf8;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 13px;
+      width: 240px;
+    }
+
+    button {
+      padding: 7px 12px;
+      font-size: 13px;
+      font-weight: bold;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      color: white;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    .btn-save { background-color: #10b981; }
+    .btn-found { background-color: #3b82f6; }
+    .btn-lost { background-color: #ef4444; }
+    .btn-refresh { background-color: #0284c7; padding: 4px 8px; font-size: 11px; }
+
+    #ar-badge {
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      background: #475569;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* HUD Layout Container (unterhalb der Top-Leiste) */
     .hud-container {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
+      position: fixed !important;
+      top: 60px !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      z-index: 999999 !important;
       display: grid;
       grid-template-columns: 350px 1fr 350px;
       grid-template-rows: auto 1fr auto;
       padding: 20px;
-      padding-bottom: 90px;
       pointer-events: none;
       box-sizing: border-box;
-      animation: fadeIn 0.3s ease-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
     }
 
     .ar-box {
       pointer-events: auto;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(56, 189, 248, 0.4);
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(56, 189, 248, 0.5);
       border-radius: 12px;
       padding: 16px 20px;
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       color: #f8fafc;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
     }
 
     .box-top-left { grid-column: 1; grid-row: 1; }
@@ -100,7 +180,7 @@
       color: #38bdf8;
       text-transform: uppercase;
       letter-spacing: 1px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
       padding-bottom: 6px;
       margin-bottom: 10px;
       display: flex;
@@ -129,58 +209,14 @@
       width: 100%;
     }
 
-    /* Steuerleiste unten */
-    #debug-controls {
-      position: fixed;
-      bottom: 15px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10000;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid rgba(255,255,255,0.15);
-      padding: 8px 12px;
-      border-radius: 12px;
-      width: max-content;
-      max-width: 95vw;
-    }
-
-    input.url-input {
-      background: #1e293b;
-      color: #fff;
-      border: 1px solid #475569;
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 13px;
-      width: 240px;
-    }
-
-    button {
-      padding: 8px 12px;
-      font-size: 13px;
-      font-weight: bold;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      color: white;
-      transition: opacity 0.2s;
-    }
-    button:hover { opacity: 0.85; }
-    .btn-found { background-color: #3b82f6; }
-    .btn-lost { background-color: #ef4444; }
-    .btn-save { background-color: #10b981; }
-    .btn-refresh { background-color: #0284c7; padding: 4px 8px; font-size: 11px; }
-
     @media (max-width: 950px) {
       .hud-container {
+        top: 105px !important;
         display: flex;
         flex-direction: column;
         gap: 12px;
         overflow-y: auto;
-        padding-bottom: 120px;
+        padding-bottom: 40px;
       }
       .box-bottom-center { width: auto; max-width: none; }
     }
@@ -188,16 +224,18 @@
 </head>
 <body>
 
-  <!-- Steuerleiste: Scan-Simulation & Node-RED Tunnel-URL -->
-  <div id="debug-controls">
+  <!-- STEUERLEISTE OBEN (Immer sichtbar) -->
+  <div id="top-bar">
+    <span class="bar-title">KOFFER 21</span>
     <input type="text" id="tunnel-url" class="url-input" placeholder="https://eure-id.lhr.life">
-    <button class="btn-save" onclick="saveTunnelUrl()">Verbinden</button>
-    <button class="btn-found" onclick="simulateMarkerFound()">HUD Ein</button>
-    <button class="btn-lost" onclick="simulateMarkerLost()">HUD Aus</button>
+    <button class="btn-save" onclick="saveTunnelUrl()">Node-RED Verbinden</button>
+    <button class="btn-found" onclick="toggleHud(true)">HUD Ein</button>
+    <button class="btn-lost" onclick="toggleHud(false)">HUD Aus</button>
+    <span id="ar-badge">Marker: Kein Scan</span>
   </div>
 
-  <!-- AR HUD -->
-  <div id="hud" class="hud-container hidden">
+  <!-- AR HUD (Jetzt standardmäßig SOFORT SICHTBAR ohne "hidden") -->
+  <div id="hud" class="hud-container">
     
     <!-- Box 1: Live-Messungen (WebSocket & MQTT Koffer 21) -->
     <div class="ar-box box-top-left">
@@ -205,7 +243,7 @@
         <span>Live Vibration (Koffer 21)</span>
       </div>
       <div class="data-row">
-        <span class="data-label">Sensor:</span>
+        <span class="data-label">OPC UA Node:</span>
         <span class="data-val">P-101.Vibration</span>
       </div>
       <div class="data-row">
@@ -217,7 +255,7 @@
         <span id="mqtt-value" class="data-val status-ok">-- mm/s</span>
       </div>
       <div class="data-row">
-        <span class="data-label">Verbindung:</span>
+        <span class="data-label">Status:</span>
         <span class="data-val">
           <span id="ws-status" class="status-pending">WS...</span> | 
           <span id="mqtt-status" class="status-pending">MQTT...</span>
@@ -229,7 +267,7 @@
     <div class="ar-box box-top-right">
       <div class="box-header">
         <span>SQLite DB (REST API)</span>
-        <button class="btn-refresh" onclick="fetchRestData()">Laden</button>
+        <button class="btn-refresh" onclick="fetchRestData()">Neu laden</button>
       </div>
       <div class="data-row">
         <span class="data-label">Letzter DB-Wert:</span>
@@ -261,20 +299,17 @@
 
   </div>
 
-  <!-- AR.js Szene -->
+  <!-- AR.js Szene im Hintergrund -->
   <a-scene
     vr-mode-ui="enabled: false"
     renderer="logarithmicDepthBuffer: true"
     embedded
-    arjs="sourceType: webcam; facingMode: environment; sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720; debugUIEnabled: false;">
+    arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false;">
     <a-marker preset="hiro" id="hiro-marker" markerhandler></a-marker>
     <a-entity camera></a-entity>
   </a-scene>
 
   <script>
-    // =========================================================================
-    // 1. KONFIGURATION FÜR KOFFER 21
-    // =========================================================================
     const KOFFER_NR = "21";
     const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
     const TOPIC_OWN = `/bbk-lf7/${KOFFER_NR}/power-house/vibration`;
@@ -309,9 +344,7 @@
       }
     }
 
-    // =========================================================================
-    // 2. CHART.JS INITIALISIERUNG
-    // =========================================================================
+    // Chart.js Initialisierung
     const ctx = document.getElementById('vibrationChart').getContext('2d');
     const vibrationChart = new Chart(ctx, {
       type: 'line',
@@ -351,9 +384,7 @@
       vibrationChart.update();
     }
 
-    // =========================================================================
-    // 3. WEBSOCKET (Passt ws:// bzw. wss:// automatisch an die URL an)
-    // =========================================================================
+    // WebSocket Verbindung
     function initWebSocket() {
       const wsStatus = document.getElementById('ws-status');
       const wsValue = document.getElementById('ws-value');
@@ -398,9 +429,7 @@
       }
     }
 
-    // =========================================================================
-    // 4. MQTT (Funktioniert auf GitHub Pages sofort über HiveMQ WSS)
-    // =========================================================================
+    // MQTT Verbindung
     function initMQTT() {
       const mqttStatus = document.getElementById('mqtt-status');
       const mqttValue = document.getElementById('mqtt-value');
@@ -435,11 +464,8 @@
       });
     }
 
-    // =========================================================================
-    // 5. REST-API (SQLite Abfragen von Node-RED)
-    // =========================================================================
+    // REST API Abfragen
     async function fetchRestData() {
-      // 1. Letzter Wert
       try {
         const res1 = await fetch(`${nodeRedHttpUrl}/api/vibration/latest`);
         const data1 = await res1.json();
@@ -450,7 +476,6 @@
         }
       } catch (e) {}
 
-      // 2. Durchschnitt der letzten 5 Minuten
       try {
         const res2 = await fetch(`${nodeRedHttpUrl}/api/vibration/average-5-mins`);
         const data2 = await res2.json();
@@ -461,15 +486,12 @@
         }
       } catch (e) {}
 
-      // 3. Verlauf der letzten 5 Minuten
       try {
         const res3 = await fetch(`${nodeRedHttpUrl}/api/vibration/last-5-mins`);
         const data3 = await res3.json();
         if (Array.isArray(data3) && data3.length > 0) {
           document.getElementById('rest-count').textContent = `${data3.length} Einträge`;
-          
           vibrationChart.data.labels = data3.map(item => {
-            // SQLite liefert UTC ("YYYY-MM-DD HH:MM:SS"), 'Z' anhängen für korrekte lokale Uhrzeit
             const ts = item.timestamp ? item.timestamp.replace(' ', 'T') + 'Z' : Date.now();
             return new Date(ts).toLocaleTimeString('de-DE');
           });
