@@ -7,20 +7,18 @@
   
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
-  <!-- AR Event Listener Komponente -->
   <script>
     AFRAME.registerComponent('markerhandler', {
       init: function () {
         const overlay = document.getElementById('overlay');
         
-        // Wenn der Marker (echt oder per Button) gefunden wird
         this.el.addEventListener('markerFound', () => {
           console.log('Marker gefunden! Blende Dashboard ein.');
           overlay.style.display = 'block';
         });
 
-        // Wenn der Marker (echt oder per Button) verloren geht
         this.el.addEventListener('markerLost', () => {
           console.log('Marker verloren! Blende Dashboard aus.');
           overlay.style.display = 'none';
@@ -28,9 +26,7 @@
       }
     });
 
-    // Neue, reparierte Funktionen für die Buttons
     window.simulateMarkerFound = () => {
-      // Nutzt A-Frames .emit() anstelle von dispatchEvent
       document.getElementById('hiro-marker').emit('markerFound');
     }
     
@@ -50,14 +46,13 @@
       background-color: #000;
     }
 
-    /* Das Dashboard Overlay */
     #overlay {
       display: none; 
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      z-index: 9999; /* Garantiert über der Kamera */
+      z-index: 9999; 
       width: 90%;
       max-width: 380px;
       max-height: 80vh;
@@ -73,7 +68,6 @@
       animation: fadeIn 0.3s ease-out;
     }
 
-    /* Test-Buttons unten am Bildschirm */
     #debug-controls {
       position: fixed;
       bottom: 30px;
@@ -109,97 +103,4 @@
     h2 { 
       margin-top: 0; 
       font-size: 1.4rem; 
-      border-bottom: 1px solid rgba(255,255,255,0.1); 
-      padding-bottom: 12px; 
-      color: #38bdf8; 
-      text-align: center;
-      letter-spacing: 0.5px;
-    }
-
-    .section { margin-bottom: 22px; }
-    .section:last-child { margin-bottom: 0; }
-    
-    .section-title { 
-      font-weight: bold; 
-      font-size: 0.85rem; 
-      margin-bottom: 12px; 
-      color: #94a3b8; 
-      text-transform: uppercase; 
-      letter-spacing: 1px; 
-    }
-    
-    .data-row { 
-      display: flex; 
-      justify-content: space-between; 
-      margin-bottom: 10px; 
-      font-size: 0.95rem; 
-      border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
-      padding-bottom: 4px;
-    }
-    .data-row:last-child { border-bottom: none; }
-    
-    .data-label { color: #cbd5e1; }
-    .data-value { font-weight: 600; color: #fff; text-align: right; }
-    
-    .status-ok { color: #4ade80; }
-    .status-pending { color: #facc15; }
-    .status-active { color: #60a5fa; }
-
-    /* Kamera-/Canvas-Darstellung */
-    video, canvas {
-      width: 100vw !important;
-      height: 100vh !important;
-      object-fit: contain !important;
-    }
-  </style>
-</head>
-<body>
-  <!-- Sichtbare Buttons zum Testen auf dem Desktop -->
-  <div id="debug-controls">
-    <button class="btn-found" onclick="simulateMarkerFound()">Scan simulieren</button>
-    <button class="btn-lost" onclick="simulateMarkerLost()">Scan beenden</button>
-  </div>
-
-  <!-- UI Overlay -->
-  <div id="overlay">
-    <h2>Maschinen-Monitor</h2>
-
-    <div class="section">
-      <div class="section-title">Messungen</div>
-      <div class="data-row"><span class="data-label">TARA-Messung:</span> <span class="data-value">0.45 kg</span></div>
-      <div class="data-row"><span class="data-label">Brutto Messung:</span> <span class="data-value">2.10 kg</span></div>
-      <div class="data-row"><span class="data-label">Netto Gewicht:</span> <span class="data-value">1.65 kg</span></div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Ablauf</div>
-      <div class="data-row"><span class="data-label">RFID Start:</span> <span class="data-value status-ok">Erfolgreich</span></div>
-      <div class="data-row"><span class="data-label">TARA-Messung:</span> <span class="data-value status-ok">Abgeschlossen</span></div>
-      <div class="data-row"><span class="data-label">Ausgabe der Kugeln:</span> <span class="data-value status-active">Läuft...</span></div>
-      <div class="data-row"><span class="data-label">Brutto Messung:</span> <span class="data-value status-pending">Ausstehend</span></div>
-      <div class="data-row"><span class="data-label">Netto Gewicht:</span> <span class="data-value status-pending">Ausstehend</span></div>
-      <div class="data-row"><span class="data-label">RFID:</span> <span class="data-value status-active">Aktiv</span></div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Anlage</div>
-      <div class="data-row"><span class="data-label">Kugeln (Rot):</span> <span class="data-value">120 Stk.</span></div>
-      <div class="data-row"><span class="data-label">Kugeln (Blau):</span> <span class="data-value">85 Stk.</span></div>
-      <div class="data-row"><span class="data-label">Gewicht der Kugeln:</span> <span class="data-value">1.65 kg</span></div>
-    </div>
-  </div>
-
-  <!-- AR.js Szene -->
-  <a-scene
-    vr-mode-ui="enabled: false"
-    renderer="logarithmicDepthBuffer: true"
-    embedded
-    arjs="sourceType: webcam; facingMode: environment; sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720; debugUIEnabled: false;">
-    
-    <!-- Hier ist die Komponente "markerhandler" angehängt -->
-    <a-marker preset="hiro" id="hiro-marker" markerhandler></a-marker>
-    
-    <a-entity camera></a-entity>
-  </a-scene>
-</body>
-</html>
+      border-bottom: 1px solid rgba(25
