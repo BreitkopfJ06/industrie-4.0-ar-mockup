@@ -3,180 +3,106 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Industrie 4.0 - AR HUD View</title>
-
+  <title>UI Vorschau - Industrie 4.0 Dashboard</title>
   <style>
-    :root {
-      color-scheme: dark;
-      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    :root { 
+      color-scheme: dark; 
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
     }
-
-    * {
-      box-sizing: border-box;
-    }
-
     body {
       margin: 0;
-      overflow: hidden;
-      background: #0f172a;
-      width: 100vw;
+      /* Simulierter verschwommener Maschinen-Hintergrund anstatt Kamera */
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      background-size: cover;
       height: 100vh;
-    }
-
-    /* Kamera-Hintergrund */
-    #camera-stream {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      z-index: 1;
-    }
-
-    /* HUD Layout Container (dauerhaft sichtbar) */
-    .hud-container {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      display: grid;
-      grid-template-columns: minmax(260px, 320px) 1fr minmax(260px, 320px);
-      grid-template-rows: auto 1fr auto;
-      padding: 20px;
-      pointer-events: none;
-    }
-
-    /* Einzelne AR-Boxen */
-    .ar-box {
-      pointer-events: auto;
-      background: rgba(15, 23, 42, 0.78);
-      border: 1px solid rgba(56, 189, 248, 0.35);
-      border-radius: 12px;
-      padding: 16px 20px;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      color: #f8fafc;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-    }
-
-    .box-top-left {
-      grid-column: 1;
-      grid-row: 1;
-      align-self: start;
-    }
-
-    .box-top-right {
-      grid-column: 3;
-      grid-row: 1;
-      align-self: start;
-    }
-
-    .box-bottom-center {
-      grid-column: 1 / 4;
-      grid-row: 3;
-      justify-self: center;
-      width: 100%;
-      max-width: 580px;
-    }
-
-    .box-header {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: #38bdf8;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      padding-bottom: 6px;
-      margin-bottom: 10px;
-    }
-
-    .data-row {
       display: flex;
-      justify-content: space-between;
-      margin-bottom: 8px;
-      font-size: 0.9rem;
-    }
-    .data-row:last-child { margin-bottom: 0; }
-
-    .data-label { color: #94a3b8; }
-    .data-val { font-weight: 600; color: #fff; }
-
-    /* Ablauf als horizontale Schrittanzeige im unteren Bereich */
-    .flow-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px 20px;
+      align-items: center;
+      justify-content: center;
     }
 
+    /* Modernes AR-Dashboard (Sichtbar by Default) */
+    #overlay {
+      display: block; 
+      width: 90%;
+      max-width: 380px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: #f8fafc;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+
+    h2 { 
+      margin-top: 0; 
+      font-size: 1.4rem; 
+      border-bottom: 1px solid rgba(255,255,255,0.1); 
+      padding-bottom: 12px; 
+      color: #38bdf8; 
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+
+    .section { margin-bottom: 22px; }
+    .section:last-child { margin-bottom: 0; }
+    
+    .section-title { 
+      font-weight: bold; 
+      font-size: 0.85rem; 
+      margin-bottom: 12px; 
+      color: #94a3b8; 
+      text-transform: uppercase; 
+      letter-spacing: 1px; 
+    }
+    
+    .data-row { 
+      display: flex; 
+      justify-content: space-between; 
+      margin-bottom: 10px; 
+      font-size: 0.95rem; 
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+      padding-bottom: 4px;
+    }
+    .data-row:last-child { border-bottom: none; }
+    
+    .data-label { color: #cbd5e1; }
+    .data-value { font-weight: 600; color: #fff; text-align: right; }
+    
     .status-ok { color: #4ade80; }
-    .status-active { color: #38bdf8; }
     .status-pending { color: #facc15; }
-
-    /* Responsives Verhalten für schmale Mobilgeräte */
-    @media (max-width: 800px) {
-      .hud-container {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        overflow-y: auto;
-      }
-      .box-bottom-center { width: 100%; max-width: none; }
-      .flow-grid { grid-template-columns: 1fr; }
-    }
+    .status-active { color: #60a5fa; }
   </style>
 </head>
 <body>
+  <!-- UI Overlay ist hier dauerhaft sichtbar zentriert -->
+  <div id="overlay">
+    <h2>Maschinen-Monitor</h2>
 
-  <!-- Kamera-Feed im Hintergrund -->
-  <video id="camera-stream" autoplay playsinline muted></video>
-
-  <!-- AR HUD mit 3 getrennten Boxen (Permanent eingeblendet) -->
-  <div id="hud" class="hud-container">
-    
-    <!-- Box 1: Messungen (Oben Links) -->
-    <div class="ar-box box-top-left">
-      <div class="box-header">Messungen</div>
-      <div class="data-row"><span class="data-label">TARA-Messung:</span><span class="data-val">0.45 kg</span></div>
-      <div class="data-row"><span class="data-label">Brutto Messung:</span><span class="data-val">2.10 kg</span></div>
-      <div class="data-row"><span class="data-label">Netto Gewicht:</span><span class="data-val">1.65 kg</span></div>
+    <div class="section">
+      <div class="section-title">Messungen</div>
+      <div class="data-row"><span class="data-label">TARA-Messung:</span> <span class="data-value">0.45 kg</span></div>
+      <div class="data-row"><span class="data-label">Brutto Messung:</span> <span class="data-value">2.10 kg</span></div>
+      <div class="data-row"><span class="data-label">Netto Gewicht:</span> <span class="data-value">1.65 kg</span></div>
     </div>
 
-    <!-- Box 3: Anlage (Oben Rechts) -->
-    <div class="ar-box box-top-right">
-      <div class="box-header">Anlage</div>
-      <div class="data-row"><span class="data-label">Menge (Rot):</span><span class="data-val">120 Stk.</span></div>
-      <div class="data-row"><span class="data-label">Menge (Blau):</span><span class="data-val">85 Stk.</span></div>
-      <div class="data-row"><span class="data-label">Gewicht Kugeln:</span><span class="data-val">1.65 kg</span></div>
+    <div class="section">
+      <div class="section-title">Ablauf</div>
+      <div class="data-row"><span class="data-label">RFID Start:</span> <span class="data-value status-ok">Erfolgreich</span></div>
+      <div class="data-row"><span class="data-label">TARA-Messung:</span> <span class="data-value status-ok">Abgeschlossen</span></div>
+      <div class="data-row"><span class="data-label">Ausgabe der Kugeln:</span> <span class="data-value status-active">Läuft...</span></div>
+      <div class="data-row"><span class="data-label">Brutto Messung:</span> <span class="data-value status-pending">Ausstehend</span></div>
+      <div class="data-row"><span class="data-label">Netto Gewicht:</span> <span class="data-value status-pending">Ausstehend</span></div>
+      <div class="data-row"><span class="data-label">RFID:</span> <span class="data-value status-active">Aktiv</span></div>
     </div>
 
-    <!-- Box 2: Ablauf (Unten Mitte) -->
-    <div class="ar-box box-bottom-center">
-      <div class="box-header">Prozess Ablauf</div>
-      <div class="flow-grid">
-        <div class="data-row"><span class="data-label">RFID Start:</span><span class="data-val status-ok">OK</span></div>
-        <div class="data-row"><span class="data-label">TARA:</span><span class="data-val status-ok">Erledigt</span></div>
-        <div class="data-row"><span class="data-label">Ausgabe:</span><span class="data-val status-active">Läuft...</span></div>
-        <div class="data-row"><span class="data-label">Brutto:</span><span class="data-val status-pending">Wartet</span></div>
-        <div class="data-row"><span class="data-label">Netto:</span><span class="data-val status-pending">Wartet</span></div>
-        <div class="data-row"><span class="data-label">RFID:</span><span class="data-val status-active">Aktiv</span></div>
-      </div>
+    <div class="section">
+      <div class="section-title">Anlage</div>
+      <div class="data-row"><span class="data-label">Kugeln (Rot):</span> <span class="data-value">120 Stk.</span></div>
+      <div class="data-row"><span class="data-label">Kugeln (Blau):</span> <span class="data-value">85 Stk.</span></div>
+      <div class="data-row"><span class="data-label">Gewicht der Kugeln:</span> <span class="data-value">1.65 kg</span></div>
     </div>
-
   </div>
-
-  <!-- Startet die Kamera im Hintergrund (falls vorhanden) -->
-  <script>
-    const video = document.getElementById('camera-stream');
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        .then(stream => {
-          video.srcObject = stream;
-        })
-        .catch(err => {
-          console.warn('Kamera nicht verfügbar oder Zugriff verweigert – zeige HUD auf dunklem Hintergrund.', err);
-        });
-    }
-  </script>
-
 </body>
 </html>
