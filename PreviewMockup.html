@@ -103,4 +103,145 @@
     h2 { 
       margin-top: 0; 
       font-size: 1.4rem; 
-      border-bottom: 1px solid rgba(25
+      border-bottom: 1px solid rgba(255,255,255,0.1); 
+      padding-bottom: 12px; 
+      color: #38bdf8; 
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+
+    .section { margin-bottom: 22px; }
+    .section:last-child { margin-bottom: 0; }
+    
+    .section-title { 
+      font-weight: bold; 
+      font-size: 0.85rem; 
+      margin-bottom: 12px; 
+      color: #94a3b8; 
+      text-transform: uppercase; 
+      letter-spacing: 1px; 
+    }
+    
+    .data-row { 
+      display: flex; 
+      justify-content: space-between; 
+      margin-bottom: 10px; 
+      font-size: 0.95rem; 
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+      padding-bottom: 4px;
+    }
+    .data-row:last-child { border-bottom: none; }
+    
+    .data-label { color: #cbd5e1; }
+    .data-value { font-weight: 600; color: #fff; text-align: right; }
+    
+    .status-ok { color: #4ade80; }
+    .status-pending { color: #facc15; }
+    .status-active { color: #60a5fa; }
+    
+    /* Dynamische Farbgebung für kritische Vibrationswerte */
+    .val-critical { color: #ef4444 !important; animation: pulse 1.5s infinite; }
+    
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    video, canvas {
+      width: 100vw !important;
+      height: 100vh !important;
+      object-fit: contain !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="debug-controls">
+    <button class="btn-found" onclick="simulateMarkerFound()">Scan simulieren</button>
+    <button class="btn-lost" onclick="simulateMarkerLost()">Scan beenden</button>
+  </div>
+
+  <div id="overlay">
+    <h2>Maschinen-Monitor</h2>
+
+    <!-- Neuer Bereich für das Power House -->
+    <div class="section">
+      <div class="section-title">Power House Sensorik</div>
+      <div class="data-row">
+        <span class="data-label">Vibration (LF7/21):</span> 
+        <span class="data-value" id="val-vibration">Warte auf Daten...</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Status:</span> 
+        <span class="data-value status-active" id="val-status">Aktiv</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Messungen (Archiv)</div>
+      <div class="data-row"><span class="data-label">TARA-Messung:</span> <span class="data-value" id="val-tara">0.45 kg</span></div>
+      <div class="data-row"><span class="data-label">Netto Gewicht:</span> <span class="data-value" id="val-netto">1.65 kg</span></div>
+    </div>
+  </div>
+
+  <a-scene
+    vr-mode-ui="enabled: false"
+    renderer="logarithmicDepthBuffer: true"
+    embedded
+    arjs="sourceType: webcam; facingMode: environment; sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720; debugUIEnabled: false;">
+    
+    <a-marker preset="hiro" id="hiro-marker" markerhandler></a-marker>
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    const mqttBrokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
+    const clientId = 'ar_dashboard_' + Math.random().toString(16).substr(2, 8);
+
+    console.log(`Verbinde mit MQTT Broker unter ${mqttBrokerUrl}...`);
+    
+    const client = mqtt.connect(mqttBrokerUrl, {
+      clientId: clientId,
+      clean: true,
+      connectTimeout: 4000,
+      reconnectPeriod: 1000,
+    });
+
+    client.on('connect', () => {
+      console.log('Erfolgreich mit MQTT Broker verbunden!');
+      
+      // Abonniere das neue spezifische Topic
+      client.subscribe('/bbk-lf7/21/power-house/vibration');
+    });
+
+    client.on('message', (topic, message) => {
+      const payload = message.toString();
+      console.log(`Nachricht empfangen auf ${topic}: ${payload}`);
+
+      if (topic === '/bbk-lf7/21/power-house/vibration') {
+        const vibElement = document.getElementById('val-vibration');
+        const statusElement = document.getElementById('val-status');
+        
+        // Wert direkt im Dashboard anzeigen (Einheit kann je nach Sensor angepasst werden, hier generisch)
+        vibElement.innerText = payload;
+
+        // Optional: Logik für visuelle Warnungen bei hohen Werten (Beispielhaft > 10)
+        const numericValue = parseFloat(payload);
+        if (!isNaN(numericValue) && numericValue > 10.0) {
+          vibElement.classList.add('val-critical');
+          statusElement.innerText = "Warnung";
+          statusElement.className = "data-value val-critical";
+        } else {
+          vibElement.classList.remove('val-critical');
+          statusElement.innerText = "Normal";
+          statusElement.className = "data-value status-ok";
+        }
+      }
+    });
+
+    client.on('error', (err) => {
+      console.error('MQTT Verbindungsfehler: ', err);
+    });
+  </script>
+</body>
+</html>
