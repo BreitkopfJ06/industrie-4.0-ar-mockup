@@ -706,15 +706,18 @@
             if (appState.dbRecords.length > 1800) {
                 appState.dbRecords.shift();
             }
+        }
+
         function appendPipelineLog(text) {
-            const box = document.getElementById('live-pipeline-log');
-            if (!box) return;
-            const ts = new Date().toTimeString().split(' ')[0];
-            const row = document.createElement('div');
-            row.textContent = `[${ts}] ${text}`;
-            box.prepend(row);
-            while (box.children.length > 8) {
-                box.removeChild(box.lastChild);
+            if (mode === 'sim-ar') {
+                stopCameraStream();
+                video.classList.add('hidden');
+                fallback.classList.add('hidden');
+                canvas.classList.remove('hidden');
+                requestAnimationFrame(() => drawSimArCanvas());
+            } else if (mode === 'camera') {
+                canvas.classList.add('hidden');
+                startCameraStream();
             }
         }
 
