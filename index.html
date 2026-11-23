@@ -34,8 +34,8 @@
   <!-- Chart.js for 5-Minute Historical Data -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- MQTT.js for HiveMQ Public Broker via WebSockets -->
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <!-- MQTT.js 5.16.1 for HiveMQ Public Broker via WebSockets -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.16.1/mqtt.min.js"></script>
 
   <style>
     /* Base scroll & industrial feel */
@@ -108,6 +108,24 @@
       border-radius: 9999px;
       background: inherit;
       animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+
+    /* Pulsing alert glow for active Alarm banner */
+    @keyframes alarm-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.55); border-color: rgba(244, 63, 94, 0.9); }
+      50% { box-shadow: 0 0 24px 4px rgba(244, 63, 94, 0.35); border-color: rgba(251, 113, 133, 1); }
+    }
+    .alarm-banner-pulse {
+      animation: alarm-pulse 1.5s ease-in-out infinite;
+    }
+
+    /* Pulsing outage glow for Ausfall banner */
+    @keyframes outage-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.5); border-color: rgba(249, 115, 22, 0.9); }
+      50% { box-shadow: 0 0 20px 3px rgba(249, 115, 22, 0.3); border-color: rgba(251, 146, 60, 1); }
+    }
+    .outage-banner-pulse {
+      animation: outage-pulse 1.8s ease-in-out infinite;
     }
   </style>
 </head>
@@ -198,29 +216,119 @@
   <!-- ===================================================================== -->
   <!-- NO-CAMERA DASHBOARD MODE (DEFAULT VIEW)                               -->
   <!-- ===================================================================== -->
-  <main id="dashboard-view" class="mx-auto max-w-7xl px-4 py-6 sm:px-6 space-y-6">
+  <main id="dashboard-view" class="mx-auto max-w-7xl px-4 py-6 sm:px-6 space-y-5">
 
-    <!-- Top Status Banner -->
-    <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface/80 border border-slate-800 px-4 py-3">
-      <div class="flex items-center gap-3">
-        <span id="overall-status-dot" class="relative h-3 w-3 rounded-full bg-emerald-400 pulse-ring"></span>
-        <div>
-          <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Machine Health Status</span>
-          <div class="flex items-center gap-2">
-            <span id="overall-status-text" class="text-sm font-bold text-emerald-400">NORMAL OPERATION</span>
-            <span class="text-xs text-slate-500">|</span>
-            <span class="font-mono text-xs text-slate-400">Thresholds: &lt;2.5 OK · 2.5–3.5 WARN · &gt;3.5 CRIT</span>
+    <!-- =================================================================== -->
+    <!-- PROMINENT ALARM & AUSFALL BANNERS (Dashboard)                       -->
+    <!-- =================================================================== -->
+    <div id="dashboard-banners" class="space-y-3">
+      <!-- ALARM BANNER (Pulsing Red when state === "alarm") -->
+      <div id="dash-alarm-banner" class="hidden rounded-2xl bg-rose-950/90 border-2 border-rose-500 px-5 py-4 alarm-banner-pulse">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500/20 border border-rose-500/50 text-rose-400">
+              <svg class="h-6 w-6 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <div class="text-sm sm:text-base font-bold tracking-wide text-rose-200">
+                ALARM: Vibrationsgrenzwert überschritten!
+              </div>
+              <div class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-rose-300">
+                <span>Wert: <strong id="dash-alarm-val" class="text-white">0.0000 mm/s</strong></span>
+                <span class="text-rose-500">|</span>
+                <span>Zeitpunkt: <strong id="dash-alarm-ts" class="text-white">--:--:--</strong></span>
+              </div>
+            </div>
           </div>
+          <span class="rounded-lg bg-rose-500 px-3 py-1 font-mono text-xs font-bold uppercase text-white shadow">
+            ACTIVE ALARM
+          </span>
         </div>
       </div>
 
-      <div class="flex items-center gap-3">
-        <!-- Quick Simulation Toggle -->
-        <label class="flex items-center gap-2 cursor-pointer select-none rounded-xl bg-slatebg/70 px-3 py-1.5 border border-slate-700/70">
-          <span class="text-xs font-medium text-slate-300">Simulation Mode</span>
-          <input type="checkbox" id="quick-sim-toggle" checked onchange="toggleSimulation(this.checked)" class="sr-only peer" />
-          <div class="relative w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
-        </label>
+      <!-- AUSFALL BANNER (High-Visibility Orange/Red when "Ausfall" received) -->
+      <div id="dash-outage-banner" class="hidden rounded-2xl bg-orange-950/90 border-2 border-orange-500 px-5 py-4 outage-banner-pulse">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/20 border border-orange-500/50 text-orange-400">
+              <svg class="h-6 w-6 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+              </svg>
+            </div>
+            <div>
+              <div class="text-sm sm:text-base font-bold tracking-wide text-orange-200">
+                AUSFALL: Keine Messwerte seit &gt;15s!
+              </div>
+              <div class="mt-0.5 font-mono text-xs text-orange-300">
+                Status-Meldung empfangen um <strong id="dash-outage-ts" class="text-white">--:--:--</strong> — OPC UA / Sensor-Verbindung prüfen.
+              </div>
+            </div>
+          </div>
+          <span class="rounded-lg bg-orange-500 px-3 py-1 font-mono text-xs font-bold uppercase text-slate-950 shadow">
+            AUSFALL
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Status Bar + Alarm/Status Pills + Simulation Quick Triggers -->
+    <div class="rounded-2xl bg-surface/80 border border-slate-800 px-4 py-3 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span id="overall-status-dot" class="relative h-3 w-3 rounded-full bg-emerald-400 pulse-ring"></span>
+          <div>
+            <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Machine Health &amp; MQTT Status</span>
+            <div class="flex flex-wrap items-center gap-2 mt-0.5">
+              <span id="overall-status-text" class="text-sm font-bold text-emerald-400">NORMAL OPERATION</span>
+              <span class="text-xs text-slate-600">|</span>
+              <!-- Alarm / Entwarnung Status Pill -->
+              <span id="pill-alarm-status" class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300 border border-emerald-500/30">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                Entwarnung (OK)
+              </span>
+              <!-- Ausfall / Wieder verfügbar Status Pill -->
+              <span id="pill-outage-status" class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300 border border-emerald-500/30">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                Anlage wieder verfügbar
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <!-- Quick Simulation Toggle -->
+          <label class="flex items-center gap-2 cursor-pointer select-none rounded-xl bg-slatebg/70 px-3 py-1.5 border border-slate-700/70">
+            <span class="text-xs font-medium text-slate-300">Simulation Mode</span>
+            <input type="checkbox" id="quick-sim-toggle" checked onchange="toggleSimulation(this.checked)" class="sr-only peer" />
+            <div class="relative w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Quick Simulation Test Triggers (Visible when Simulation Mode is ON) -->
+      <div id="sim-test-bar" class="pt-2.5 border-t border-slate-700/60 flex flex-wrap items-center justify-between gap-2">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-amber-300/90 flex items-center gap-1.5">
+          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+          </svg>
+          Test Triggers (Simulation):
+        </span>
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="simulateAlarmTrigger('alarm')" class="rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 px-2.5 py-1 text-[11px] font-semibold text-rose-300 transition-colors">
+            Trigger Alarm
+          </button>
+          <button onclick="simulateAlarmTrigger('ok')" class="rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 transition-colors">
+            Entwarnung (OK)
+          </button>
+          <button onclick="simulateOutageTrigger('Ausfall')" class="rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/40 px-2.5 py-1 text-[11px] font-semibold text-orange-300 transition-colors">
+            Trigger Ausfall
+          </button>
+          <button onclick="simulateOutageTrigger('wieder verfügbar')" class="rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 px-2.5 py-1 text-[11px] font-semibold text-cyan-300 transition-colors">
+            Wieder verfügbar
+          </button>
+        </div>
       </div>
     </div>
 
@@ -259,7 +367,7 @@
 
         <div class="pt-3 border-t border-slate-700/60 flex items-center justify-between text-[11px] text-slate-400">
           <span class="truncate max-w-[180px] font-mono" id="card-ws-endpoint">Simulated Stream</span>
-          <button onclick="openSettingsDrawer('ws')" class="text-cyan-400 hover:text-cyan-300 font-medium">Configure</button>
+          <button onclick="openSettingsDrawer()" class="text-cyan-400 hover:text-cyan-300 font-medium">Configure</button>
         </div>
       </div>
 
@@ -274,7 +382,7 @@
               </svg>
               MQTT Live Text
             </span>
-            <p id="card-mqtt-topic" class="mt-0.5 font-mono text-[10px] text-slate-400 truncate max-w-[180px]" title="/bbk-lf7/kiste-1/power-house/vibration">/bbk-lf7/kiste-1/power-house/vibration</p>
+            <p id="card-mqtt-topic" class="mt-0.5 font-mono text-[10px] text-slate-400 truncate max-w-[180px]" title="/bbk-lf7/eure-kistennummer/power-house/vibration">/bbk-lf7/eure-kistennummer/power-house/vibration</p>
           </div>
           <span id="mqtt-conn-badge" class="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300 border border-amber-500/30">
             <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
@@ -337,7 +445,7 @@
 
         <div class="pt-3 border-t border-slate-700/60 flex items-center justify-between text-[11px]">
           <span class="font-mono text-slate-400 truncate max-w-[140px]">GET /latest</span>
-          <button onclick="fetchAllRestEndpoints()" class="rounded-lg bg-indigo-500/20 px-2.5 py-1 text-indigo-300 hover:bg-indigo-500/30 font-semibold transition-colors">
+          <button onclick="fetchAllRestEndpoints(true)" class="rounded-lg bg-indigo-500/20 px-2.5 py-1 text-indigo-300 hover:bg-indigo-500/30 font-semibold transition-colors">
             Fetch Now
           </button>
         </div>
@@ -387,13 +495,13 @@
     <section class="grid grid-cols-1 gap-6 lg:grid-cols-12">
 
       <!-- 2D Animated Ball-Filling Machine Canvas (5 cols on lg) -->
-      <div class="lg:col-span-5 rounded-2xl bg-surface border border-slate-800 p-5 shadow-lg shadow-slate-950/40 flex flex-col">
+      <div id="twin-card" class="lg:col-span-5 rounded-2xl bg-surface border border-slate-800 p-5 shadow-lg shadow-slate-950/40 flex flex-col transition-all duration-300">
         <div class="flex items-center justify-between mb-3">
           <div>
             <h2 class="text-sm font-bold text-white flex items-center gap-2">
               <span>Live Digital Twin — P-101 Ball Filler</span>
             </h2>
-            <p class="text-xs text-slate-400">Box vibration amplitude scales with live sensor reading</p>
+            <p class="text-xs text-slate-400">Box vibration &amp; glow reflect live sensor, Alarm &amp; Ausfall</p>
           </div>
           <span id="twin-vib-pill" class="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 tabular-nums">
             2.1324 mm/s
@@ -401,7 +509,7 @@
         </div>
 
         <!-- Responsive Canvas Container -->
-        <div id="machine-canvas-wrapper" class="relative flex-1 min-h-[280px] w-full rounded-xl bg-slatebg border border-slate-800 overflow-hidden">
+        <div id="machine-canvas-wrapper" class="relative flex-1 min-h-[280px] w-full rounded-xl bg-slatebg border border-slate-800 overflow-hidden transition-colors duration-300">
           <canvas id="machine-canvas" class="block w-full h-full"></canvas>
           <!-- Subtle HUD overlay inside canvas -->
           <div class="pointer-events-none absolute top-3 left-3 flex flex-col gap-1">
@@ -410,7 +518,7 @@
             </span>
           </div>
           <div class="pointer-events-none absolute bottom-3 right-3">
-            <span class="rounded bg-slate-900/80 px-2 py-0.5 font-mono text-[10px] text-slate-400 border border-slate-700/70">
+            <span id="canvas-state-badge" class="rounded bg-slate-900/80 px-2 py-0.5 font-mono text-[10px] text-slate-400 border border-slate-700/70">
               NO-CAMERA PREVIEW
             </span>
           </div>
@@ -450,40 +558,68 @@
   <div id="ar-container" class="hidden"></div>
 
   <div id="ar-hud" class="hidden flex-col justify-between p-4">
-    <!-- Top AR Bar -->
-    <div class="flex items-center justify-between gap-2">
-      <div class="interactive flex items-center gap-2 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-slate-700/80 px-3.5 py-2 shadow-xl">
-        <span id="ar-hud-dot" class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
-        <div>
-          <div class="text-xs font-bold text-white leading-tight">AR Hiro Scanner Active</div>
-          <div class="font-mono text-[11px] text-cyan-300 tabular-nums">
-            Live: <span id="ar-hud-val">2.1324</span> mm/s
+    <!-- Top AR Bar + AR Alarm/Ausfall Banners -->
+    <div class="space-y-2.5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="interactive flex items-center gap-2 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-slate-700/80 px-3.5 py-2 shadow-xl">
+          <span id="ar-hud-dot" class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+          <div>
+            <div class="text-xs font-bold text-white leading-tight">AR Hiro Scanner Active</div>
+            <div class="font-mono text-[11px] text-cyan-300 tabular-nums">
+              Live: <span id="ar-hud-val">2.1324</span> mm/s
+            </div>
           </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            onclick="openHiroModal()"
+            class="interactive rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-700/80 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-cyan-400"
+          >
+            Hiro Marker
+          </button>
+          <button
+            onclick="openSettingsDrawer()"
+            class="interactive rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-700/80 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-cyan-400"
+          >
+            Settings
+          </button>
+          <button
+            onclick="switchMode('dashboard')"
+            class="interactive flex items-center gap-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg"
+          >
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Exit AR
+          </button>
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <button
-          onclick="openHiroModal()"
-          class="interactive rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-700/80 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-cyan-400"
-        >
-          Hiro Marker
-        </button>
-        <button
-          onclick="openSettingsDrawer()"
-          class="interactive rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-700/80 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-cyan-400"
-        >
-          Settings
-        </button>
-        <button
-          onclick="switchMode('dashboard')"
-          class="interactive flex items-center gap-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg"
-        >
-          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          Exit AR
-        </button>
+      <!-- AR HUD ALARM BANNER -->
+      <div id="ar-alarm-banner" class="hidden interactive rounded-xl bg-rose-950/90 backdrop-blur-md border-2 border-rose-500 px-3.5 py-2.5 alarm-banner-pulse">
+        <div class="flex items-center justify-between gap-2">
+          <div class="text-xs font-bold text-rose-100">
+            ALARM: Vibrationsgrenzwert überschritten!
+            <span class="block font-mono text-[11px] text-rose-300 mt-0.5">
+              Wert: <strong id="ar-alarm-val" class="text-white">0.0000 mm/s</strong> · <span id="ar-alarm-ts">--:--:--</span>
+            </span>
+          </div>
+          <span class="rounded bg-rose-500 px-2 py-0.5 font-mono text-[10px] font-bold text-white shrink-0">ALARM</span>
+        </div>
+      </div>
+
+      <!-- AR HUD AUSFALL BANNER -->
+      <div id="ar-outage-banner" class="hidden interactive rounded-xl bg-orange-950/90 backdrop-blur-md border-2 border-orange-500 px-3.5 py-2.5 outage-banner-pulse">
+        <div class="flex items-center justify-between gap-2">
+          <div class="text-xs font-bold text-orange-100">
+            AUSFALL: Keine Messwerte seit &gt;15s!
+            <span class="block font-mono text-[11px] text-orange-300 mt-0.5">
+              Seit <span id="ar-outage-ts">--:--:--</span>
+            </span>
+          </div>
+          <span class="rounded bg-orange-500 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-950 shrink-0">AUSFALL</span>
+        </div>
       </div>
     </div>
 
@@ -504,7 +640,7 @@
     <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4">
       <div>
         <h2 class="text-base font-bold text-white">Connection Settings</h2>
-        <p class="text-xs text-slate-400">Configure Node-RED WebSocket, HiveMQ MQTT &amp; REST APIs</p>
+        <p class="text-xs text-slate-400">Saved automatically to localStorage</p>
       </div>
       <button onclick="closeSettingsDrawer()" class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white">
         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -514,26 +650,43 @@
     </div>
 
     <!-- Drawer Scrollable Body -->
-    <div class="flex-1 overflow-y-auto p-5 space-y-6">
+    <div class="flex-1 overflow-y-auto p-5 space-y-5">
 
-      <!-- 1. Simulation Mode Section -->
-      <div class="rounded-xl bg-slatebg/80 border border-slate-700/70 p-4">
+      <!-- 1. Simulation Mode & Test Triggers Section -->
+      <div class="rounded-xl bg-slatebg/80 border border-slate-700/70 p-4 space-y-3">
         <div class="flex items-center justify-between">
           <div>
             <h3 class="text-sm font-bold text-amber-300">Built-in Simulation Mode</h3>
-            <p class="text-xs text-slate-400 mt-0.5">Generates realistic vibration (~2.1324 mm/s) every 2s across all displays.</p>
+            <p class="text-xs text-slate-400 mt-0.5">Generates realistic vibration (~2.1324 mm/s) every 2s.</p>
           </div>
           <label class="cursor-pointer">
             <input type="checkbox" id="drawer-sim-toggle" checked onchange="toggleSimulation(this.checked)" class="sr-only peer" />
             <div class="relative w-11 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
           </label>
         </div>
+        <div class="pt-2 border-t border-slate-800">
+          <div class="text-[11px] font-semibold text-slate-400 mb-2">Quick Banner Test Triggers</div>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="simulateAlarmTrigger('alarm')" class="rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 px-2.5 py-1.5 text-[11px] font-semibold text-rose-300 transition-colors">
+              Test Alarm
+            </button>
+            <button onclick="simulateAlarmTrigger('ok')" class="rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-300 transition-colors">
+              Entwarnung (OK)
+            </button>
+            <button onclick="simulateOutageTrigger('Ausfall')" class="rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/40 px-2.5 py-1.5 text-[11px] font-semibold text-orange-300 transition-colors">
+              Test Ausfall
+            </button>
+            <button onclick="simulateOutageTrigger('wieder verfügbar')" class="rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 px-2.5 py-1.5 text-[11px] font-semibold text-cyan-300 transition-colors">
+              Wieder verfügbar
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- 2. WebSocket Section -->
       <div class="space-y-3 rounded-xl bg-slatebg/60 border border-slate-800 p-4">
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-bold text-cyan-400">1. WebSocket (Node-RED / localhost.run)</h3>
+          <h3 class="text-sm font-bold text-cyan-400">1. WebSocket (Node-RED)</h3>
           <span id="drawer-ws-status" class="font-mono text-[11px] text-slate-400">Disconnected</span>
         </div>
         <div>
@@ -546,19 +699,19 @@
           />
         </div>
         <div class="flex gap-2">
-          <button id="btn-ws-connect" onclick="connectWebSocket()" class="flex-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 px-3 py-2 text-xs font-bold text-slate-950 transition-colors">
-            Connect WebSocket
+          <button onclick="connectWebSocket()" class="flex-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 px-3 py-2 text-xs font-bold text-slate-950 transition-colors">
+            Connect WS
           </button>
-          <button id="btn-ws-disconnect" onclick="disconnectWebSocket()" class="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 border border-slate-700 transition-colors">
+          <button onclick="disconnectWebSocket()" class="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 border border-slate-700 transition-colors">
             Disconnect
           </button>
         </div>
       </div>
 
-      <!-- 3. MQTT Section (HiveMQ) -->
+      <!-- 3. MQTT Section (HiveMQ + Alarm + Status) -->
       <div class="space-y-3 rounded-xl bg-slatebg/60 border border-slate-800 p-4">
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-bold text-cyan-400">2. MQTT (HiveMQ Public Broker)</h3>
+          <h3 class="text-sm font-bold text-cyan-400">2. MQTT (HiveMQ Broker)</h3>
           <span id="drawer-mqtt-status" class="font-mono text-[11px] text-slate-400">Disconnected</span>
         </div>
         <div>
@@ -571,17 +724,31 @@
           />
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1">Box Number (Kistennummer)</label>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Main Vibration Topic</label>
           <input
             type="text"
-            id="input-mqtt-box"
-            value="kiste-1"
-            oninput="updateMqttTopicPreview()"
+            id="input-mqtt-main-topic"
+            value="/bbk-lf7/eure-kistennummer/power-house/vibration"
             class="w-full rounded-lg bg-slatebg border border-slate-700 px-3 py-2 font-mono text-xs text-white focus:border-cyan-500 focus:outline-none"
           />
-          <p class="mt-1 font-mono text-[11px] text-slate-400">
-            Topic: <span id="mqtt-topic-preview" class="text-cyan-300">/bbk-lf7/kiste-1/power-house/vibration</span>
-          </p>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-rose-300 mb-1">Alarm Topic (JSON: state, value, ts)</label>
+          <input
+            type="text"
+            id="input-mqtt-alarm-topic"
+            value="lf7/gruppeX/power-house/vibration/alarm"
+            class="w-full rounded-lg bg-slatebg border border-slate-700 px-3 py-2 font-mono text-xs text-white focus:border-rose-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-orange-300 mb-1">Status Topic ("Ausfall" / "wieder verfügbar")</label>
+          <input
+            type="text"
+            id="input-mqtt-status-topic"
+            value="lf7/gruppeX/power-house/vibration/status"
+            class="w-full rounded-lg bg-slatebg border border-slate-700 px-3 py-2 font-mono text-xs text-white focus:border-orange-500 focus:outline-none"
+          />
         </div>
         <label class="flex items-start gap-2.5 cursor-pointer pt-1">
           <input type="checkbox" id="input-mqtt-wildcard" checked onchange="onWildcardToggle(this.checked)" class="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slatebg text-cyan-500 focus:ring-cyan-500" />
@@ -641,7 +808,13 @@
           </button>
         </div>
       </div>
+    </div>
 
+    <!-- Drawer Footer: Save & Apply Button -->
+    <div class="border-t border-slate-800 p-4 bg-slatebg/80">
+      <button onclick="saveAndApplySettings()" class="w-full rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 py-2.5 text-xs font-bold text-slate-950 shadow-lg transition-all">
+        Save &amp; Apply Settings
+      </button>
     </div>
   </aside>
 
@@ -665,15 +838,10 @@
       <!-- Crisp Inline SVG of the Standard AR.js HIRO Marker -->
       <div class="mx-auto w-64 h-64 rounded-xl bg-white p-3 shadow-inner flex items-center justify-center">
         <svg viewBox="0 0 200 200" class="w-full h-full" xmlns="http://www.w3.org/2000/svg" aria-label="HIRO AR Marker">
-          <!-- White quiet zone -->
           <rect x="0" y="0" width="200" height="200" fill="#ffffff" />
-          <!-- Thick black AR.js marker border (25% on each side) -->
           <rect x="10" y="10" width="180" height="180" fill="#000000" />
-          <!-- Inner white pattern area -->
           <rect x="55" y="55" width="90" height="90" fill="#ffffff" />
-          <!-- Classic HIRO bold lettering matching AR.js preset pattern -->
           <g fill="#000000">
-            <!-- Top Row: H I -->
             <!-- H -->
             <rect x="64" y="63" width="8" height="34" />
             <rect x="84" y="63" width="8" height="34" />
@@ -682,8 +850,6 @@
             <rect x="108" y="63" width="24" height="7" />
             <rect x="116" y="70" width="8" height="20" />
             <rect x="108" y="90" width="24" height="7" />
-
-            <!-- Bottom Row: R O -->
             <!-- R -->
             <rect x="64" y="104" width="8" height="34" />
             <rect x="72" y="104" width="14" height="7" />
@@ -717,6 +883,8 @@
   <!-- APPLICATION LOGIC                                                     -->
   <!-- ===================================================================== -->
   <script>
+    const STORAGE_KEY = 'p101_ar_telemetry_settings_v2';
+
     /**
      * =========================================================================
      * CENTRAL APPLICATION STATE
@@ -730,10 +898,24 @@
       arScriptsLoaded: false,
       arAnimFrame: null,
 
-      // Thresholds (mm/s)
       thresholds: {
         warn: 2.5,
         crit: 3.5,
+      },
+
+      // Alarm State (Task A: { state: "alarm" | "ok", value, ts })
+      alarm: {
+        active: false,
+        state: 'ok',
+        value: null,
+        ts: null,
+      },
+
+      // Outage / Ausfall State (Task B: "Ausfall" | "wieder verfügbar")
+      outage: {
+        active: false,
+        statusText: 'wieder verfügbar',
+        ts: null,
       },
 
       // Live Telemetry Values
@@ -748,7 +930,9 @@
         client: null,
         connected: false,
         url: 'wss://broker.hivemq.com:8884/mqtt',
-        boxId: 'kiste-1',
+        mainTopic: '/bbk-lf7/eure-kistennummer/power-house/vibration',
+        alarmTopic: 'lf7/gruppeX/power-house/vibration/alarm',
+        statusTopic: 'lf7/gruppeX/power-house/vibration/status',
         wildcard: true,
         value: 2.1324,
         rawText: '2.1324',
@@ -756,9 +940,12 @@
         feed: [],
       },
       rest: {
+        latestUrl: 'http://localhost:1880/api/vibration/latest',
+        historyUrl: 'http://localhost:1880/api/vibration/history',
+        avgUrl: 'http://localhost:1880/api/vibration/average',
         latest: { value: 2.1324, timestamp: new Date() },
         average: { value: 2.1180, min: 1.8820, max: 2.6140 },
-        history: [], // Array of { timestamp: Date, value: Number }
+        history: [],
         autoPoll: false,
         liveConnected: false,
       }
@@ -766,12 +953,153 @@
 
     /**
      * =========================================================================
-     * UTILITY & RESILIENT PARSERS
+     * LOCALSTORAGE PERSISTENCE
      * =========================================================================
      */
+    function loadSettingsFromStorage() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+
+        if (typeof saved.simulation === 'boolean') state.simulation = saved.simulation;
+        if (saved.wsUrl !== undefined) state.ws.url = saved.wsUrl;
+        if (saved.mqttUrl) state.mqtt.url = saved.mqttUrl;
+        if (saved.mqttMainTopic) state.mqtt.mainTopic = saved.mqttMainTopic;
+        if (saved.mqttAlarmTopic) state.mqtt.alarmTopic = saved.mqttAlarmTopic;
+        if (saved.mqttStatusTopic) state.mqtt.statusTopic = saved.mqttStatusTopic;
+        if (typeof saved.mqttWildcard === 'boolean') state.mqtt.wildcard = saved.mqttWildcard;
+        if (saved.restLatestUrl) state.rest.latestUrl = saved.restLatestUrl;
+        if (saved.restHistoryUrl) state.rest.historyUrl = saved.restHistoryUrl;
+        if (saved.restAvgUrl) state.rest.avgUrl = saved.restAvgUrl;
+        if (typeof saved.restAutoPoll === 'boolean') state.rest.autoPoll = saved.restAutoPoll;
+      } catch (err) {
+        console.warn('Could not load settings from localStorage:', err);
+      }
+    }
+
+    function applySettingsToInputs() {
+      document.getElementById('quick-sim-toggle').checked = state.simulation;
+      document.getElementById('drawer-sim-toggle').checked = state.simulation;
+      document.getElementById('sim-badge').classList.toggle('hidden', !state.simulation);
+      document.getElementById('sim-test-bar').classList.toggle('hidden', !state.simulation);
+
+      document.getElementById('input-ws-url').value = state.ws.url;
+      document.getElementById('input-mqtt-url').value = state.mqtt.url;
+      document.getElementById('input-mqtt-main-topic').value = state.mqtt.mainTopic;
+      document.getElementById('input-mqtt-alarm-topic').value = state.mqtt.alarmTopic;
+      document.getElementById('input-mqtt-status-topic').value = state.mqtt.statusTopic;
+      document.getElementById('input-mqtt-wildcard').checked = state.mqtt.wildcard;
+
+      document.getElementById('input-rest-latest').value = state.rest.latestUrl;
+      document.getElementById('input-rest-history').value = state.rest.historyUrl;
+      document.getElementById('input-rest-avg').value = state.rest.avgUrl;
+      document.getElementById('input-rest-autopoll').checked = state.rest.autoPoll;
+    }
+
+    function saveSettingsToStorage() {
+      const payload = {
+        simulation: state.simulation,
+        wsUrl: document.getElementById('input-ws-url').value.trim(),
+        mqttUrl: document.getElementById('input-mqtt-url').value.trim(),
+        mqttMainTopic: document.getElementById('input-mqtt-main-topic').value.trim(),
+        mqttAlarmTopic: document.getElementById('input-mqtt-alarm-topic').value.trim(),
+        mqttStatusTopic: document.getElementById('input-mqtt-status-topic').value.trim(),
+        mqttWildcard: document.getElementById('input-mqtt-wildcard').checked,
+        restLatestUrl: document.getElementById('input-rest-latest').value.trim(),
+        restHistoryUrl: document.getElementById('input-rest-history').value.trim(),
+        restAvgUrl: document.getElementById('input-rest-avg').value.trim(),
+        restAutoPoll: document.getElementById('input-rest-autopoll').checked,
+      };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      } catch (err) {
+        console.warn('Could not save settings to localStorage:', err);
+      }
+    }
+
+    function saveAndApplySettings() {
+      state.ws.url = document.getElementById('input-ws-url').value.trim();
+      state.mqtt.url = document.getElementById('input-mqtt-url').value.trim();
+      state.mqtt.mainTopic = document.getElementById('input-mqtt-main-topic').value.trim() || '/bbk-lf7/eure-kistennummer/power-house/vibration';
+      state.mqtt.alarmTopic = document.getElementById('input-mqtt-alarm-topic').value.trim() || 'lf7/gruppeX/power-house/vibration/alarm';
+      state.mqtt.statusTopic = document.getElementById('input-mqtt-status-topic').value.trim() || 'lf7/gruppeX/power-house/vibration/status';
+      state.mqtt.wildcard = document.getElementById('input-mqtt-wildcard').checked;
+      state.rest.latestUrl = document.getElementById('input-rest-latest').value.trim();
+      state.rest.historyUrl = document.getElementById('input-rest-history').value.trim();
+      state.rest.avgUrl = document.getElementById('input-rest-avg').value.trim();
+
+      saveSettingsToStorage();
+      updateAllDisplays();
+
+      // Reconnect active services if URLs are provided
+      if (state.ws.url) connectWebSocket();
+      if (state.mqtt.url) connectMQTT();
+      if (state.rest.autoPoll) fetchAllRestEndpoints(false);
+
+      showToast('Settings saved to localStorage and applied.', 'success');
+      closeSettingsDrawer();
+    }
 
     /**
-     * Shows a sleek toast notification (never uses alert()).
+     * =========================================================================
+     * ALARM & AUSFALL HANDLERS + SIMULATION TEST TRIGGERS
+     * =========================================================================
+     */
+    function handleAlarmMessage(rawText) {
+      let data = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        const lower = rawText.trim().toLowerCase();
+        data = { state: lower.includes('alarm') ? 'alarm' : 'ok', value: getPrimaryVibration(), ts: Date.now() };
+      }
+
+      const alarmState = (data.state || '').toString().toLowerCase();
+      const val = parseVibrationValue(data.value) ?? getPrimaryVibration();
+      const ts = data.ts ? new Date(Number(data.ts) || data.ts) : new Date();
+
+      if (alarmState === 'alarm') {
+        state.alarm = { active: true, state: 'alarm', value: val, ts };
+        showToast(`ALARM: Vibrationsgrenzwert überschritten (${val.toFixed(4)} mm/s)!`, 'error');
+      } else if (alarmState === 'ok' || alarmState === 'entwarnung') {
+        state.alarm = { active: false, state: 'ok', value: val, ts };
+        showToast(`Entwarnung (OK): Vibration wieder normal (${val.toFixed(4)} mm/s).`, 'success');
+      }
+
+      updateAllDisplays();
+    }
+
+    function handleStatusMessage(rawText) {
+      const text = rawText.trim();
+      const lower = text.toLowerCase();
+      const now = new Date();
+
+      if (lower.includes('ausfall')) {
+        state.outage = { active: true, statusText: 'Ausfall', ts: now };
+        showToast('AUSFALL: Keine Messwerte seit >15s!', 'error');
+      } else if (lower.includes('wieder') || lower.includes('verfügbar') || lower.includes('online') || lower.includes('ok')) {
+        state.outage = { active: false, statusText: 'wieder verfügbar', ts: now };
+        showToast('Anlage wieder verfügbar!', 'success');
+      }
+
+      updateAllDisplays();
+    }
+
+    function simulateAlarmTrigger(targetState) {
+      const val = targetState === 'alarm' ? Number((3.85 + Math.random() * 0.6).toFixed(4)) : 1.9840;
+      const payload = JSON.stringify({ state: targetState, value: val, ts: Date.now() });
+      handleAlarmMessage(payload);
+    }
+
+    function simulateOutageTrigger(targetText) {
+      handleStatusMessage(targetText);
+    }
+
+    /**
+     * =========================================================================
+     * UTILITY & RESILIENT PARSERS
+     * =========================================================================
      */
     function showToast(message, type = 'info') {
       const container = document.getElementById('toast-container');
@@ -796,27 +1124,35 @@
       }, 4200);
     }
 
-    /**
-     * Formats a Date object as HH:MM:SS.
-     */
     function formatTime(dateObj) {
       const d = dateObj instanceof Date && !isNaN(dateObj) ? dateObj : new Date();
       return d.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
     /**
-     * Returns status metadata (label, tailwind classes, hex color) for a vibration reading.
+     * Computes effective visual status, prioritizing active Ausfall or Alarm states.
      */
-    function getVibrationStatus(val) {
-      if (val >= state.thresholds.crit) {
+    function getEffectiveStatus(val) {
+      if (state.outage.active) {
+        return {
+          level: 'outage',
+          label: 'AUSFALL',
+          longLabel: 'AUSFALL (>15s KEINE WERTE)',
+          hex: '#f97316', // orange-500
+          textClass: 'text-orange-400',
+          bgClass: 'bg-orange-500',
+          badgeClass: 'bg-orange-500/15 text-orange-400 border-orange-500/40',
+        };
+      }
+      if (state.alarm.active || val >= state.thresholds.crit) {
         return {
           level: 'crit',
-          label: 'CRITICAL',
-          longLabel: 'CRITICAL VIBRATION',
+          label: state.alarm.active ? 'ALARM' : 'CRITICAL',
+          longLabel: state.alarm.active ? 'ALARM AKTIV' : 'CRITICAL VIBRATION',
           hex: '#f43f5e', // rose-500
           textClass: 'text-rose-400',
           bgClass: 'bg-rose-500',
-          badgeClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+          badgeClass: 'bg-rose-500/15 text-rose-400 border-rose-500/40',
         };
       }
       if (val >= state.thresholds.warn) {
@@ -841,33 +1177,19 @@
       };
     }
 
-    /**
-     * Resilient parser that extracts a numeric vibration value from raw numbers,
-     * numeric strings, JSON strings, objects ({value, vibration, avg, ...}), or arrays.
-     */
     function parseVibrationValue(input) {
       if (input === null || input === undefined) return null;
-
-      if (typeof input === 'number' && !isNaN(input)) {
-        return input;
-      }
+      if (typeof input === 'number' && !isNaN(input)) return input;
 
       if (typeof input === 'string') {
         const trimmed = input.trim();
-        // Direct numeric string (e.g., "2.1324" or "2,1324")
         const directNum = Number(trimmed.replace(',', '.'));
-        if (!isNaN(directNum) && trimmed !== '') {
-          return directNum;
-        }
-        // Try JSON.parse
+        if (!isNaN(directNum) && trimmed !== '') return directNum;
         try {
-          const parsed = JSON.parse(trimmed);
-          return parseVibrationValue(parsed);
+          return parseVibrationValue(JSON.parse(trimmed));
         } catch {
-          // Fallback: extract first floating-point number from text
           const match = trimmed.match(/-?\d+(\.\d+)?/);
-          if (match) return parseFloat(match[0]);
-          return null;
+          return match ? parseFloat(match[0]) : null;
         }
       }
 
@@ -883,19 +1205,13 @@
             if (v !== null) return v;
           }
         }
-        // Fallback: first numeric property in object
         for (const key of Object.keys(input)) {
-          const val = input[key];
-          if (typeof val === 'number' && !isNaN(val)) return val;
+          if (typeof input[key] === 'number' && !isNaN(input[key])) return input[key];
         }
       }
-
       return null;
     }
 
-    /**
-     * Resilient parser for REST history endpoint returning arrays of readings.
-     */
     function parseHistoryData(input) {
       let arr = input;
       if (typeof input === 'string') {
@@ -924,9 +1240,6 @@
         .filter(Boolean);
     }
 
-    /**
-     * Returns the primary live vibration number (prioritizing live WS, then MQTT, then REST).
-     */
     function getPrimaryVibration() {
       if (state.ws.connected) return state.ws.value;
       if (state.mqtt.connected) return state.mqtt.value;
@@ -942,7 +1255,6 @@
 
     function initChart() {
       const ctx = document.getElementById('vibration-chart').getContext('2d');
-
       const gradient = ctx.createLinearGradient(0, 0, 0, 280);
       gradient.addColorStop(0, 'rgba(34, 211, 238, 0.30)');
       gradient.addColorStop(1, 'rgba(34, 211, 238, 0.0)');
@@ -1007,21 +1319,13 @@
           scales: {
             x: {
               grid: { color: 'rgba(148, 163, 184, 0.08)' },
-              ticks: {
-                color: '#64748b',
-                font: { family: 'JetBrains Mono', size: 10 },
-                maxTicksLimit: 7,
-              }
+              ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 }, maxTicksLimit: 7 }
             },
             y: {
               suggestedMin: 1.2,
               suggestedMax: 3.6,
               grid: { color: 'rgba(148, 163, 184, 0.08)' },
-              ticks: {
-                color: '#94a3b8',
-                font: { family: 'JetBrains Mono', size: 10 },
-                callback: (v) => v.toFixed(1)
-              }
+              ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 }, callback: (v) => v.toFixed(1) }
             }
           }
         }
@@ -1044,55 +1348,112 @@
 
     /**
      * =========================================================================
-     * UI SYNCHRONIZATION (DASHBOARD + AR 3D TELEMETRY BOARD)
+     * UI SYNCHRONIZATION (DASHBOARD + BANNERS + AR HUD + 3D AR BOARD)
      * =========================================================================
      */
     function updateAllDisplays() {
       const liveVal = getPrimaryVibration();
-      const status = getVibrationStatus(liveVal);
+      const status = getEffectiveStatus(liveVal);
 
-      // 1. Overall Status Banner
-      const overallDot = document.getElementById('overall-status-dot');
-      overallDot.className = `relative h-3 w-3 rounded-full pulse-ring ${status.bgClass}`;
+      // 1. Alarm & Ausfall Banners (Dashboard + AR HUD)
+      const dashAlarm = document.getElementById('dash-alarm-banner');
+      const arAlarm = document.getElementById('ar-alarm-banner');
+      const pillAlarm = document.getElementById('pill-alarm-status');
+
+      if (state.alarm.active) {
+        const valText = `${(state.alarm.value ?? liveVal).toFixed(4)} mm/s`;
+        const tsText = formatTime(state.alarm.ts);
+        dashAlarm.classList.remove('hidden');
+        arAlarm.classList.remove('hidden');
+        document.getElementById('dash-alarm-val').textContent = valText;
+        document.getElementById('dash-alarm-ts').textContent = tsText;
+        document.getElementById('ar-alarm-val').textContent = valText;
+        document.getElementById('ar-alarm-ts').textContent = tsText;
+
+        pillAlarm.className = 'inline-flex items-center gap-1.5 rounded-full bg-rose-500/20 px-2.5 py-0.5 text-[11px] font-bold text-rose-300 border border-rose-500/50';
+        pillAlarm.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-rose-400 animate-ping"></span>ALARM AKTIV';
+      } else {
+        dashAlarm.classList.add('hidden');
+        arAlarm.classList.add('hidden');
+        pillAlarm.className = 'inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300 border border-emerald-500/30';
+        pillAlarm.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Entwarnung (OK)';
+      }
+
+      const dashOutage = document.getElementById('dash-outage-banner');
+      const arOutage = document.getElementById('ar-outage-banner');
+      const pillOutage = document.getElementById('pill-outage-status');
+
+      if (state.outage.active) {
+        const tsText = formatTime(state.outage.ts);
+        dashOutage.classList.remove('hidden');
+        arOutage.classList.remove('hidden');
+        document.getElementById('dash-outage-ts').textContent = tsText;
+        document.getElementById('ar-outage-ts').textContent = tsText;
+
+        pillOutage.className = 'inline-flex items-center gap-1.5 rounded-full bg-orange-500/20 px-2.5 py-0.5 text-[11px] font-bold text-orange-300 border border-orange-500/50';
+        pillOutage.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-orange-400 animate-ping"></span>AUSFALL (>15s)';
+      } else {
+        dashOutage.classList.add('hidden');
+        arOutage.classList.add('hidden');
+        pillOutage.className = 'inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300 border border-emerald-500/30';
+        pillOutage.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Anlage wieder verfügbar';
+      }
+
+      // 2. Overall Status Banner
+      document.getElementById('overall-status-dot').className = `relative h-3 w-3 rounded-full pulse-ring ${status.bgClass}`;
       const overallText = document.getElementById('overall-status-text');
       overallText.textContent = status.longLabel;
       overallText.className = `text-sm font-bold ${status.textClass}`;
 
-      // 2. Card 1: WebSocket Live
+      // 3. Card 1: WebSocket Live
       document.getElementById('card-ws-value').textContent = state.ws.value.toFixed(4);
       document.getElementById('card-ws-time').textContent = `Updated ${formatTime(state.ws.lastUpdated)}`;
-      const wsStatus = getVibrationStatus(state.ws.value);
       const wsStatusEl = document.getElementById('card-ws-status');
-      wsStatusEl.textContent = wsStatus.label;
-      wsStatusEl.className = `rounded-md px-2 py-0.5 text-[11px] font-semibold border ${wsStatus.badgeClass}`;
-      document.getElementById('ws-accent-bar').className = `absolute top-0 left-0 right-0 h-1 transition-colors duration-300 ${wsStatus.bgClass}`;
+      wsStatusEl.textContent = status.label;
+      wsStatusEl.className = `rounded-md px-2 py-0.5 text-[11px] font-semibold border ${status.badgeClass}`;
+      document.getElementById('ws-accent-bar').className = `absolute top-0 left-0 right-0 h-1 transition-colors duration-300 ${status.bgClass}`;
 
-      // 3. Card 2: MQTT Live Text
+      // 4. Card 2: MQTT Live Text
       document.getElementById('card-mqtt-value').textContent = state.mqtt.value.toFixed(4);
-      const topicStr = `/bbk-lf7/${state.mqtt.boxId}/power-house/vibration`;
       const topicEl = document.getElementById('card-mqtt-topic');
-      topicEl.textContent = topicStr;
-      topicEl.title = topicStr;
+      topicEl.textContent = state.mqtt.mainTopic;
+      topicEl.title = state.mqtt.mainTopic;
 
-      // 4. Card 3: REST Latest DB
+      // 5. Card 3: REST Latest DB
       document.getElementById('card-rest-latest').textContent = state.rest.latest.value.toFixed(4);
       document.getElementById('card-rest-latest-time').textContent = formatTime(state.rest.latest.timestamp);
 
-      // 5. Card 4: REST 5-Min Average
+      // 6. Card 4: REST 5-Min Average
       document.getElementById('card-rest-avg').textContent = state.rest.average.value.toFixed(4);
       document.getElementById('card-rest-min').textContent = state.rest.average.min.toFixed(4);
       document.getElementById('card-rest-max').textContent = state.rest.average.max.toFixed(4);
       document.getElementById('card-rest-samples').textContent = `${state.rest.history.length} pts`;
 
-      // 6. Digital Twin Pill
+      // 7. Digital Twin Card Border & Pill Glow
       const twinPill = document.getElementById('twin-vib-pill');
-      twinPill.textContent = `${liveVal.toFixed(4)} mm/s`;
+      twinPill.textContent = state.outage.active ? 'AUSFALL' : `${liveVal.toFixed(4)} mm/s`;
       twinPill.className = `font-mono text-xs font-bold px-2.5 py-1 rounded-lg border tabular-nums ${status.badgeClass}`;
 
-      // 7. Chart.js Update
+      const twinCard = document.getElementById('twin-card');
+      const canvasBadge = document.getElementById('canvas-state-badge');
+      if (state.outage.active) {
+        twinCard.className = 'lg:col-span-5 rounded-2xl bg-surface border-2 border-orange-500 p-5 shadow-lg shadow-orange-950/50 flex flex-col transition-all duration-300';
+        canvasBadge.textContent = 'AUSFALL — KEINE DATEN';
+        canvasBadge.className = 'rounded bg-orange-950/90 px-2 py-0.5 font-mono text-[10px] font-bold text-orange-300 border border-orange-500/60';
+      } else if (state.alarm.active) {
+        twinCard.className = 'lg:col-span-5 rounded-2xl bg-surface border-2 border-rose-500 p-5 shadow-lg shadow-rose-950/50 flex flex-col transition-all duration-300';
+        canvasBadge.textContent = 'ALARM AKTIV';
+        canvasBadge.className = 'rounded bg-rose-950/90 px-2 py-0.5 font-mono text-[10px] font-bold text-rose-300 border border-rose-500/60';
+      } else {
+        twinCard.className = 'lg:col-span-5 rounded-2xl bg-surface border border-slate-800 p-5 shadow-lg shadow-slate-950/40 flex flex-col transition-all duration-300';
+        canvasBadge.textContent = 'NO-CAMERA PREVIEW';
+        canvasBadge.className = 'rounded bg-slate-900/80 px-2 py-0.5 font-mono text-[10px] text-slate-400 border border-slate-700/70';
+      }
+
+      // 8. Chart.js Update
       updateChart();
 
-      // 8. AR HUD & 3D Scene Telemetry Board Update (if in AR mode)
+      // 9. AR HUD & 3D Scene Telemetry Board Update
       document.getElementById('ar-hud-val').textContent = liveVal.toFixed(4);
       document.getElementById('ar-hud-dot').className = `h-2.5 w-2.5 rounded-full ${status.bgClass}`;
       updateARSceneTelemetry();
@@ -1107,7 +1468,6 @@
       if (!box) return;
       box.innerHTML = state.mqtt.feed
         .map(item => {
-          // Highlight group name from /bbk-lf7/<group>/...
           const parts = item.topic.split('/');
           const group = parts[2] || item.topic;
           return `<div class="flex items-center justify-between gap-2 border-b border-slate-800/70 pb-0.5">
@@ -1127,13 +1487,12 @@
 
     function generateSimulatedReading() {
       simPhase += 0.35;
-      // Realistic baseline around 2.1324 with gentle drift + noise + occasional spike
       const drift = Math.sin(simPhase) * 0.16;
       const noise = (Math.random() - 0.5) * 0.28;
       let spike = 0;
       const r = Math.random();
-      if (r > 0.94) spike = 1.45;       // Occasional critical spike (>3.5)
-      else if (r > 0.84) spike = 0.58;  // Occasional warning bump (2.5 - 3.5)
+      if (r > 0.94) spike = 1.45;
+      else if (r > 0.84) spike = 0.58;
 
       const val = Math.max(1.55, 2.1324 + drift + noise + spike);
       return Number(val.toFixed(4));
@@ -1142,13 +1501,9 @@
     function seedInitialSimulationHistory() {
       const now = Date.now();
       state.rest.history = [];
-      // 60 points covering the last 5 minutes (every 5 seconds)
       for (let i = 59; i >= 0; i--) {
-        const ts = new Date(now - i * 5000);
-        const val = generateSimulatedReading();
-        state.rest.history.push({ timestamp: ts, value: val });
+        state.rest.history.push({ timestamp: new Date(now - i * 5000), value: generateSimulatedReading() });
       }
-      // Make latest reading close to 2.1324 on startup
       state.rest.history[state.rest.history.length - 1].value = 2.1324;
       recomputeStatsFromHistory();
     }
@@ -1156,42 +1511,32 @@
     function recomputeStatsFromHistory() {
       const pts = state.rest.history;
       if (pts.length === 0) return;
-      let sum = 0;
-      let min = Infinity;
-      let max = -Infinity;
+      let sum = 0, min = Infinity, max = -Infinity;
       for (const p of pts) {
         sum += p.value;
         if (p.value < min) min = p.value;
         if (p.value > max) max = p.value;
       }
-      state.rest.average = {
-        value: sum / pts.length,
-        min,
-        max,
-      };
+      state.rest.average = { value: sum / pts.length, min, max };
       const last = pts[pts.length - 1];
       state.rest.latest = { value: last.value, timestamp: last.timestamp };
     }
 
     function runSimulationTick() {
-      if (!state.simulation) return;
+      if (!state.simulation || state.outage.active) return;
       const now = new Date();
       const val = generateSimulatedReading();
 
-      // Update WebSocket if not using live WS
       if (!state.ws.connected) {
         state.ws.value = val;
         state.ws.lastUpdated = now;
       }
 
-      // Update MQTT if not using live MQTT
       if (!state.mqtt.connected) {
-        // Slight offset or exact match to simulate broker latency
         state.mqtt.value = val;
         state.mqtt.rawText = val.toFixed(4);
         state.mqtt.lastUpdated = now;
 
-        // Occasionally simulate another student group publishing on wildcard topic
         if (state.mqtt.wildcard && Math.random() > 0.45) {
           const otherGroups = ['kiste-2', 'kiste-4', 'kiste-7', 'gruppe-b'];
           const g = otherGroups[Math.floor(Math.random() * otherGroups.length)];
@@ -1200,10 +1545,8 @@
         }
       }
 
-      // Update REST & History if not polling live REST
       if (!state.rest.liveConnected) {
         state.rest.history.push({ timestamp: now, value: val });
-        // Keep last 5 minutes (max 150 points at 2s interval)
         const fiveMinAgo = now.getTime() - 5 * 60 * 1000;
         while (state.rest.history.length > 150 || (state.rest.history.length > 2 && state.rest.history[0].timestamp.getTime() < fiveMinAgo)) {
           state.rest.history.shift();
@@ -1218,14 +1561,11 @@
       state.simulation = enabled;
       document.getElementById('quick-sim-toggle').checked = enabled;
       document.getElementById('drawer-sim-toggle').checked = enabled;
-
-      const badge = document.getElementById('sim-badge');
-      badge.classList.toggle('hidden', !enabled);
+      document.getElementById('sim-badge').classList.toggle('hidden', !enabled);
+      document.getElementById('sim-test-bar').classList.toggle('hidden', !enabled);
 
       if (enabled) {
-        if (!state.simInterval) {
-          state.simInterval = setInterval(runSimulationTick, 2000);
-        }
+        if (!state.simInterval) state.simInterval = setInterval(runSimulationTick, 2000);
         showToast('Simulation Mode enabled (generating data every 2s).', 'info');
       } else {
         if (state.simInterval) {
@@ -1234,6 +1574,7 @@
         }
         showToast('Simulation Mode paused. Waiting for live connections.', 'warn');
       }
+      saveSettingsToStorage();
       updateConnectionBadges();
     }
 
@@ -1273,9 +1614,7 @@
           }
         };
 
-        ws.onerror = () => {
-          showToast('WebSocket connection error. Check URL or SSL (wss://).', 'error');
-        };
+        ws.onerror = () => showToast('WebSocket connection error. Check URL or SSL (wss://).', 'error');
 
         ws.onclose = () => {
           state.ws.connected = false;
@@ -1300,17 +1639,9 @@
 
     /**
      * =========================================================================
-     * LIVE MQTT CONNECTION (HiveMQ via MQTT.js)
+     * LIVE MQTT CONNECTION (HiveMQ via MQTT.js 5.16.1)
      * =========================================================================
      */
-    function updateMqttTopicPreview() {
-      const box = document.getElementById('input-mqtt-box').value.trim() || 'kiste-1';
-      state.mqtt.boxId = box;
-      const topic = `/bbk-lf7/${box}/power-house/vibration`;
-      document.getElementById('mqtt-topic-preview').textContent = topic;
-      document.getElementById('card-mqtt-topic').textContent = topic;
-    }
-
     function onWildcardToggle(checked) {
       state.mqtt.wildcard = checked;
       document.getElementById('mqtt-wildcard-status').textContent = checked ? 'ON' : 'OFF';
@@ -1318,11 +1649,8 @@
 
       if (state.mqtt.client && state.mqtt.connected) {
         const wildcardTopic = '/bbk-lf7/+/power-house/vibration';
-        if (checked) {
-          state.mqtt.client.subscribe(wildcardTopic);
-        } else {
-          state.mqtt.client.unsubscribe(wildcardTopic);
-        }
+        if (checked) state.mqtt.client.subscribe(wildcardTopic);
+        else state.mqtt.client.unsubscribe(wildcardTopic);
       }
     }
 
@@ -1333,7 +1661,9 @@
       }
 
       const brokerUrl = document.getElementById('input-mqtt-url').value.trim();
-      const boxId = document.getElementById('input-mqtt-box').value.trim() || 'kiste-1';
+      const mainTopic = document.getElementById('input-mqtt-main-topic').value.trim() || '/bbk-lf7/eure-kistennummer/power-house/vibration';
+      const alarmTopic = document.getElementById('input-mqtt-alarm-topic').value.trim() || 'lf7/gruppeX/power-house/vibration/alarm';
+      const statusTopic = document.getElementById('input-mqtt-status-topic').value.trim() || 'lf7/gruppeX/power-house/vibration/status';
       const wildcard = document.getElementById('input-mqtt-wildcard').checked;
 
       if (!brokerUrl) {
@@ -1343,11 +1673,11 @@
 
       disconnectMQTT(true);
       state.mqtt.url = brokerUrl;
-      state.mqtt.boxId = boxId;
+      state.mqtt.mainTopic = mainTopic;
+      state.mqtt.alarmTopic = alarmTopic;
+      state.mqtt.statusTopic = statusTopic;
       state.mqtt.wildcard = wildcard;
-      updateMqttTopicPreview();
 
-      const myTopic = `/bbk-lf7/${boxId}/power-house/vibration`;
       const wildcardTopic = '/bbk-lf7/+/power-house/vibration';
 
       try {
@@ -1363,33 +1693,35 @@
 
         client.on('connect', () => {
           state.mqtt.connected = true;
-          client.subscribe(myTopic, (err) => {
-            if (!err) showToast(`MQTT subscribed to ${myTopic}`, 'success');
+          const topicsToSub = [mainTopic, alarmTopic, statusTopic];
+          if (state.mqtt.wildcard) topicsToSub.push(wildcardTopic);
+
+          client.subscribe(topicsToSub, (err) => {
+            if (!err) showToast('MQTT connected & subscribed to Vibration, Alarm & Status topics.', 'success');
           });
-          if (state.mqtt.wildcard) {
-            client.subscribe(wildcardTopic);
-          }
           updateConnectionBadges();
         });
 
         client.on('message', (topic, message) => {
           const text = message.toString();
-          const val = parseVibrationValue(text);
 
-          if (topic === myTopic) {
+          if (topic === alarmTopic) {
+            handleAlarmMessage(text);
+          } else if (topic === statusTopic) {
+            handleStatusMessage(text);
+          } else if (topic === mainTopic) {
+            const val = parseVibrationValue(text);
             state.mqtt.rawText = text;
             if (val !== null) state.mqtt.value = val;
             state.mqtt.lastUpdated = new Date();
             updateAllDisplays();
           } else {
-            // Other group's topic via wildcard
+            const val = parseVibrationValue(text);
             appendMqttFeed(topic, val !== null ? val.toFixed(4) : text);
           }
         });
 
-        client.on('error', (err) => {
-          showToast(`MQTT Error: ${err.message}`, 'error');
-        });
+        client.on('error', (err) => showToast(`MQTT Error: ${err.message}`, 'error'));
 
         client.on('close', () => {
           state.mqtt.connected = false;
@@ -1422,7 +1754,6 @@
 
       let anySuccess = false;
 
-      // 1. Fetch Latest DB Value
       if (latestUrl) {
         try {
           const res = await fetch(latestUrl);
@@ -1433,8 +1764,9 @@
           const val = parseVibrationValue(data);
           if (val !== null) {
             let ts = new Date();
-            if (data && typeof data === 'object' && (data.timestamp || data.created_at || data.time)) {
-              const d = new Date(data.timestamp || data.created_at || data.time);
+            const obj = Array.isArray(data) ? data[0] : data;
+            if (obj && typeof obj === 'object' && (obj.timestamp || obj.created_at || obj.time)) {
+              const d = new Date(obj.timestamp || obj.created_at || obj.time);
               if (!isNaN(d.getTime())) ts = d;
             }
             state.rest.latest = { value: val, timestamp: ts };
@@ -1445,7 +1777,6 @@
         }
       }
 
-      // 2. Fetch 5-Minute History
       if (historyUrl) {
         try {
           const res = await fetch(historyUrl);
@@ -1462,15 +1793,21 @@
         }
       }
 
-      // 3. Fetch 5-Minute Average
       if (avgUrl) {
         try {
           const res = await fetch(avgUrl);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const rawText = await res.text();
-          const val = parseVibrationValue(rawText);
+          let data = rawText;
+          try { data = JSON.parse(rawText); } catch {}
+          const obj = Array.isArray(data) ? data[0] : data;
+          const val = parseVibrationValue(obj);
           if (val !== null) {
             state.rest.average.value = val;
+            if (obj && typeof obj === 'object') {
+              if (typeof obj.min === 'number') state.rest.average.min = obj.min;
+              if (typeof obj.max === 'number') state.rest.average.max = obj.max;
+            }
             anySuccess = true;
           }
         } catch (err) {
@@ -1499,11 +1836,9 @@
         state.restPollInterval = setInterval(() => fetchAllRestEndpoints(false), 5000);
         showToast('REST auto-polling enabled (every 5s).', 'info');
       }
+      saveSettingsToStorage();
     }
 
-    /**
-     * Updates connection status pills across cards & settings drawer.
-     */
     function updateConnectionBadges() {
       const wsBadge = document.getElementById('ws-conn-badge');
       const drawerWs = document.getElementById('drawer-ws-status');
@@ -1571,7 +1906,7 @@
       maxBalls: 16,
       dropTimer: 0,
       boxOffsetX: 0,
-      boxState: 'filling', // 'filling' | 'sliding_out' | 'sliding_in'
+      boxState: 'filling',
     };
 
     function initMachineCanvas() {
@@ -1609,10 +1944,15 @@
       const cx = w / 2;
 
       const vib = getPrimaryVibration();
-      const status = getVibrationStatus(vib);
+      const status = getEffectiveStatus(vib);
 
-      // Shake intensity proportional to live vibration
-      const shakeAmp = Math.min(7, Math.max(0.4, (vib - 1.2) * 2.1));
+      // Pause shake & ball drops during Ausfall; intensify during Alarm
+      const shakeAmp = state.outage.active
+        ? 0
+        : state.alarm.active
+          ? 6.5
+          : Math.min(7, Math.max(0.4, (vib - 1.2) * 2.1));
+
       const shakeX = Math.sin(timestamp * 0.055) * shakeAmp;
       const shakeY = Math.cos(timestamp * 0.072) * (shakeAmp * 0.45);
 
@@ -1636,7 +1976,6 @@
       ctx.lineWidth = 1.5;
       ctx.strokeRect(24, beltY, w - 48, 16);
 
-      // Conveyor Rollers
       for (let rx = 38; rx <= w - 38; rx += 32) {
         ctx.beginPath();
         ctx.arc(rx, beltY + 8, 5, 0, Math.PI * 2);
@@ -1649,14 +1988,13 @@
       // Vibration Sensor Pad & LED Status Bar under Box
       ctx.fillStyle = status.hex;
       ctx.shadowColor = status.hex;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = state.alarm.active || state.outage.active ? 16 : 10;
       ctx.fillRect(cx - 48, beltY - 4, 96, 4);
       ctx.shadowBlur = 0;
 
-      // Hopper / Funnel Assembly at Top (vibrates slightly)
+      // Hopper / Funnel Assembly at Top
       ctx.save();
       ctx.translate(shakeX * 0.4, shakeY * 0.3);
-      // Hopper body
       ctx.beginPath();
       ctx.moveTo(cx - 56, 22);
       ctx.lineTo(cx + 56, 22);
@@ -1675,77 +2013,68 @@
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Label on Hopper
       ctx.fillStyle = '#e2e8f0';
       ctx.font = 'bold 10px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
       ctx.fillText('P-101 HOPPER', cx, 46);
       ctx.restore();
 
-      // Box Dimensions & State Machine
       const boxW = 108;
       const boxH = 74;
       const boxBaseY = beltY - 5;
 
-      if (twin.boxState === 'filling') {
-        twin.dropTimer++;
-        if (twin.dropTimer > 22 && twin.settledBalls.length + twin.fallingBalls.length < twin.maxBalls) {
-          twin.dropTimer = 0;
-          const colors = ['#22d3ee', '#38bdf8', '#818cf8', '#34d399'];
-          twin.fallingBalls.push({
-            x: cx + (Math.random() - 0.5) * 14,
-            y: 102,
-            vy: 1.5,
-            r: 8,
-            color: colors[Math.floor(Math.random() * colors.length)],
-          });
+      // Only advance box filling animation when machine is NOT in Ausfall
+      if (!state.outage.active) {
+        if (twin.boxState === 'filling') {
+          twin.dropTimer++;
+          if (twin.dropTimer > 22 && twin.settledBalls.length + twin.fallingBalls.length < twin.maxBalls) {
+            twin.dropTimer = 0;
+            const colors = ['#22d3ee', '#38bdf8', '#818cf8', '#34d399'];
+            twin.fallingBalls.push({
+              x: cx + (Math.random() - 0.5) * 14,
+              y: 102,
+              vy: 1.5,
+              r: 8,
+              color: colors[Math.floor(Math.random() * colors.length)],
+            });
+          }
+          if (twin.settledBalls.length >= twin.maxBalls && twin.fallingBalls.length === 0) {
+            twin.boxState = 'sliding_out';
+          }
+        } else if (twin.boxState === 'sliding_out') {
+          twin.boxOffsetX += 4.5;
+          if (twin.boxOffsetX > w * 0.75) {
+            twin.settledBalls = [];
+            twin.boxOffsetX = -w * 0.75;
+            twin.boxState = 'sliding_in';
+          }
+        } else if (twin.boxState === 'sliding_in') {
+          twin.boxOffsetX += 5.0;
+          if (twin.boxOffsetX >= 0) {
+            twin.boxOffsetX = 0;
+            twin.boxState = 'filling';
+          }
         }
-        if (twin.settledBalls.length >= twin.maxBalls && twin.fallingBalls.length === 0) {
-          twin.boxState = 'sliding_out';
-        }
-      } else if (twin.boxState === 'sliding_out') {
-        twin.boxOffsetX += 4.5;
-        if (twin.boxOffsetX > w * 0.75) {
-          twin.settledBalls = [];
-          twin.boxOffsetX = -w * 0.75;
-          twin.boxState = 'sliding_in';
-        }
-      } else if (twin.boxState === 'sliding_in') {
-        twin.boxOffsetX += 5.0;
-        if (twin.boxOffsetX >= 0) {
-          twin.boxOffsetX = 0;
-          twin.boxState = 'filling';
+
+        for (let i = twin.fallingBalls.length - 1; i >= 0; i--) {
+          const b = twin.fallingBalls[i];
+          b.vy += 0.32;
+          b.y += b.vy;
+
+          const idx = twin.settledBalls.length;
+          const perRow = 5;
+          const row = Math.floor(idx / perRow);
+          const col = idx % perRow;
+          const targetY = boxBaseY - 11 - row * 15;
+          const targetX = (cx - 34) + col * 17 + (row % 2 === 1 ? 6 : 0);
+
+          if (b.y >= targetY) {
+            twin.settledBalls.push({ relX: targetX - cx, relY: targetY - boxBaseY, r: b.r, color: b.color });
+            twin.fallingBalls.splice(i, 1);
+          }
         }
       }
 
-      // Update Falling Balls
-      const boxLeft = cx - boxW / 2 + twin.boxOffsetX;
-      const boxTop = boxBaseY - boxH;
-      for (let i = twin.fallingBalls.length - 1; i >= 0; i--) {
-        const b = twin.fallingBalls[i];
-        b.vy += 0.32;
-        b.y += b.vy;
-
-        // Calculate target row inside box
-        const idx = twin.settledBalls.length;
-        const perRow = 5;
-        const row = Math.floor(idx / perRow);
-        const col = idx % perRow;
-        const targetY = boxBaseY - 11 - row * 15;
-        const targetX = (cx - 34) + col * 17 + (row % 2 === 1 ? 6 : 0);
-
-        if (b.y >= targetY) {
-          twin.settledBalls.push({
-            relX: targetX - cx,
-            relY: targetY - boxBaseY,
-            r: b.r,
-            color: b.color,
-          });
-          twin.fallingBalls.splice(i, 1);
-        }
-      }
-
-      // Draw Falling Balls
       for (const b of twin.fallingBalls) {
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
@@ -1756,15 +2085,13 @@
         ctx.stroke();
       }
 
-      // Draw Box & Settled Balls (with vibration shake!)
+      // Draw Box & Settled Balls
       ctx.save();
       ctx.translate(cx + twin.boxOffsetX + shakeX, boxBaseY + shakeY);
 
-      // Back interior of box
       ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
       ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
 
-      // Settled balls inside box
       for (const sb of twin.settledBalls) {
         ctx.beginPath();
         ctx.arc(sb.relX, sb.relY, sb.r, 0, Math.PI * 2);
@@ -1775,13 +2102,11 @@
         ctx.stroke();
       }
 
-      // Semi-transparent front wall of box
       ctx.fillStyle = 'rgba(30, 41, 59, 0.35)';
       ctx.fillRect(-boxW / 2, -boxH, boxW, boxH);
 
-      // Box frame border (glows with status color)
       ctx.strokeStyle = status.hex;
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = state.alarm.active || state.outage.active ? 3.5 : 2.5;
       ctx.beginPath();
       ctx.moveTo(-boxW / 2, -boxH);
       ctx.lineTo(-boxW / 2, 0);
@@ -1789,19 +2114,15 @@
       ctx.lineTo(boxW / 2, -boxH);
       ctx.stroke();
 
-      // Box ID tag
       ctx.fillStyle = '#94a3b8';
       ctx.font = 'bold 9px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(state.mqtt.boxId.toUpperCase(), 0, -6);
+      ctx.fillText('P-101 BOX', 0, -6);
 
       ctx.restore();
 
-      // Update ball count HUD
       const countEl = document.getElementById('canvas-ball-count');
-      if (countEl) {
-        countEl.textContent = `${twin.settledBalls.length} / ${twin.maxBalls}`;
-      }
+      if (countEl) countEl.textContent = `${twin.settledBalls.length} / ${twin.maxBalls}`;
     }
 
     /**
@@ -1831,26 +2152,22 @@
       if (targetMode === state.mode) return;
 
       if (targetMode === 'ar') {
-        // 1. Verify camera permission cleanly first
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           showToast('Camera API unavailable in this browser/context (requires HTTPS). Staying in No-Camera Mode.', 'error');
           return;
         }
 
         try {
-          const testStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' }
-          });
-          // Release test stream immediately so AR.js can acquire the camera cleanly
+          const testStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
           testStream.getTracks().forEach(t => t.stop());
-        } catch (err) {
+        } catch {
           showToast('Camera permission denied or unavailable. Falling back to No-Camera Dashboard Mode.', 'warn');
           return;
         }
 
         try {
           await ensureARScriptsLoaded();
-        } catch (err) {
+        } catch {
           showToast('Could not load AR.js libraries. Check internet connection.', 'error');
           return;
         }
@@ -1865,7 +2182,6 @@
 
         mountARScene();
       } else {
-        // Switch back to No-Camera Dashboard Mode
         destroyARScene();
         state.mode = 'dashboard';
 
@@ -1876,16 +2192,13 @@
         document.getElementById('top-nav').classList.remove('hidden');
         document.getElementById('dashboard-view').classList.remove('hidden');
 
-        // Reset any inline body/html styles mutated by AR.js
         document.documentElement.style.cssText = '';
         document.body.style.cssText = '';
 
-        // Trigger chart resize after unhiding
         if (vibrationChart) vibrationChart.resize();
         showToast('Returned to No-Camera Dashboard Mode. Camera stopped.', 'info');
       }
 
-      // Sync toggle button styles
       const btnDash = document.getElementById('btn-mode-dashboard');
       const btnAr = document.getElementById('btn-mode-ar');
       if (state.mode === 'dashboard') {
@@ -1897,15 +2210,14 @@
       }
     }
 
-    /**
-     * Dynamically injects the A-Frame + AR.js Hiro Marker scene with:
-     * - Floating 3D telemetry board (<a-plane> + <a-text>)
-     * - Animated 3D ball-filling box vibrating with live sensor data
-     */
     function mountARScene() {
       const container = document.getElementById('ar-container');
       const liveVal = getPrimaryVibration();
-      const status = getVibrationStatus(liveVal);
+      const status = getEffectiveStatus(liveVal);
+      const alarmLabel = state.alarm.active ? 'ALARM AKTIV' : 'OK (ENTWARNUNG)';
+      const alarmColor = state.alarm.active ? '#f43f5e' : '#34d399';
+      const outageLabel = state.outage.active ? 'AUSFALL (>15s)' : 'ONLINE';
+      const outageColor = state.outage.active ? '#f97316' : '#34d399';
 
       container.innerHTML = `
         <a-scene
@@ -1918,64 +2230,48 @@
           <a-marker preset="hiro" id="hiro-marker">
 
             <!-- 3D FLOATING TELEMETRY BOARD -->
-            <a-entity position="0 0.75 -0.25" rotation="-30 0 0">
-              <!-- Outer Glow Accent Border -->
-              <a-plane id="ar-board-border" width="2.16" height="1.28" color="${status.hex}" position="0 0 -0.01" material="opacity: 0.85; shader: flat;"></a-plane>
-              <!-- Main Dark Slate Telemetry Panel -->
-              <a-plane width="2.10" height="1.22" color="#0f172a" position="0 0 0" material="opacity: 0.92; shader: flat;"></a-plane>
+            <a-entity position="0 0.82 -0.25" rotation="-30 0 0">
+              <a-plane id="ar-board-border" width="2.24" height="1.52" color="${status.hex}" position="0 0 -0.01" material="opacity: 0.9; shader: flat;"></a-plane>
+              <a-plane width="2.18" height="1.46" color="#0f172a" position="0 0 0" material="opacity: 0.94; shader: flat;"></a-plane>
 
               <!-- Header Bar -->
-              <a-plane width="2.10" height="0.22" color="#1e293b" position="0 0.50 0.005" material="shader: flat;"></a-plane>
-              <a-text
-                value="P-101 BALL FILLER"
-                position="-0.96 0.50 0.02"
-                color="#22d3ee"
-                width="2.4"
-                font="monoid"
-                align="left"
-              ></a-text>
+              <a-plane width="2.18" height="0.22" color="#1e293b" position="0 0.62 0.005" material="shader: flat;"></a-plane>
+              <a-text value="P-101 BALL FILLER" position="-1.00 0.62 0.02" color="#22d3ee" width="2.4" font="monoid" align="left"></a-text>
 
               <!-- Status Indicator Badge -->
-              <a-plane id="ar-status-pill" width="0.52" height="0.14" color="${status.hex}" position="0.72 0.50 0.01" material="shader: flat;"></a-plane>
-              <a-text
-                id="ar-status-text"
-                value="${status.label}"
-                position="0.72 0.50 0.02"
-                color="#0f172a"
-                width="1.6"
-                align="center"
-              ></a-text>
+              <a-plane id="ar-status-pill" width="0.56" height="0.14" color="${status.hex}" position="0.74 0.62 0.01" material="shader: flat;"></a-plane>
+              <a-text id="ar-status-text" value="${status.label}" position="0.74 0.62 0.02" color="#0f172a" width="1.6" align="center"></a-text>
 
-              <!-- Row 1: WebSocket Live Vibration -->
-              <a-text value="WS LIVE:" position="-0.96 0.24 0.02" color="#94a3b8" width="1.7" align="left"></a-text>
-              <a-text id="ar-txt-ws" value="${state.ws.value.toFixed(4)} mm/s" position="0.96 0.24 0.02" color="#ffffff" width="2.3" font="monoid" align="right"></a-text>
+              <!-- Row 1: WebSocket Live -->
+              <a-text value="WS LIVE:" position="-1.00 0.36 0.02" color="#94a3b8" width="1.7" align="left"></a-text>
+              <a-text id="ar-txt-ws" value="${state.ws.value.toFixed(4)} mm/s" position="1.00 0.36 0.02" color="#ffffff" width="2.3" font="monoid" align="right"></a-text>
 
-              <!-- Row 2: MQTT Live Vibration -->
-              <a-text value="MQTT TEXT:" position="-0.96 0.02 0.02" color="#94a3b8" width="1.7" align="left"></a-text>
-              <a-text id="ar-txt-mqtt" value="${state.mqtt.value.toFixed(4)} mm/s" position="0.96 0.02 0.02" color="#22d3ee" width="2.1" font="monoid" align="right"></a-text>
+              <!-- Row 2: MQTT Live -->
+              <a-text value="MQTT TEXT:" position="-1.00 0.16 0.02" color="#94a3b8" width="1.7" align="left"></a-text>
+              <a-text id="ar-txt-mqtt" value="${state.mqtt.value.toFixed(4)} mm/s" position="1.00 0.16 0.02" color="#22d3ee" width="2.1" font="monoid" align="right"></a-text>
 
-              <!-- Row 3: DB Latest Value (REST) -->
-              <a-text value="DB LATEST:" position="-0.96 -0.20 0.02" color="#94a3b8" width="1.7" align="left"></a-text>
-              <a-text id="ar-txt-latest" value="${state.rest.latest.value.toFixed(4)} mm/s" position="0.96 -0.20 0.02" color="#a5b4fc" width="2.1" font="monoid" align="right"></a-text>
+              <!-- Row 3: 5-Min Average -->
+              <a-text value="5-MIN AVG:" position="-1.00 -0.04 0.02" color="#94a3b8" width="1.7" align="left"></a-text>
+              <a-text id="ar-txt-avg" value="${state.rest.average.value.toFixed(4)} mm/s" position="1.00 -0.04 0.02" color="#a5b4fc" width="2.1" font="monoid" align="right"></a-text>
 
-              <!-- Row 4: 5-Min Average (REST) -->
-              <a-text value="5-MIN AVG:" position="-0.96 -0.42 0.02" color="#94a3b8" width="1.7" align="left"></a-text>
-              <a-text id="ar-txt-avg" value="${state.rest.average.value.toFixed(4)} mm/s" position="0.96 -0.42 0.02" color="#34d399" width="2.1" font="monoid" align="right"></a-text>
+              <!-- Row 4: Alarm Status -->
+              <a-text value="ALARM:" position="-1.00 -0.26 0.02" color="#94a3b8" width="1.7" align="left"></a-text>
+              <a-text id="ar-txt-alarm" value="${alarmLabel}" position="1.00 -0.26 0.02" color="${alarmColor}" width="2.0" font="monoid" align="right"></a-text>
+
+              <!-- Row 5: Ausfall / Online Status -->
+              <a-text value="STATUS:" position="-1.00 -0.48 0.02" color="#94a3b8" width="1.7" align="left"></a-text>
+              <a-text id="ar-txt-outage" value="${outageLabel}" position="1.00 -0.48 0.02" color="${outageColor}" width="2.0" font="monoid" align="right"></a-text>
             </a-entity>
 
-            <!-- 3D MINIATURE BALL-FILLING MACHINE (Vibrates with live data) -->
-            <a-entity id="ar-machine-assembly" position="0 0.22 0.55">
-              <!-- Vibrating Box Container -->
+            <!-- 3D MINIATURE BALL-FILLING MACHINE -->
+            <a-entity id="ar-machine-assembly" position="0 0.22 0.58">
               <a-entity id="ar-vib-box" position="0 0 0">
-                <!-- Box Floor -->
                 <a-box position="0 0 0" width="0.52" height="0.04" depth="0.52" color="#334155"></a-box>
-                <!-- Box 4 Walls (semi-transparent glowing with status color) -->
                 <a-box id="ar-box-wall-1" position="0 0.16 0.25" width="0.52" height="0.30" depth="0.03" color="${status.hex}" material="opacity: 0.55; transparent: true;"></a-box>
                 <a-box id="ar-box-wall-2" position="0 0.16 -0.25" width="0.52" height="0.30" depth="0.03" color="${status.hex}" material="opacity: 0.55; transparent: true;"></a-box>
                 <a-box id="ar-box-wall-3" position="-0.25 0.16 0" width="0.03" height="0.30" depth="0.52" color="${status.hex}" material="opacity: 0.55; transparent: true;"></a-box>
                 <a-box id="ar-box-wall-4" position="0.25 0.16 0" width="0.03" height="0.30" depth="0.52" color="${status.hex}" material="opacity: 0.55; transparent: true;"></a-box>
 
-                <!-- Settled Balls inside the 3D Box -->
                 <a-sphere position="-0.12 0.09 -0.10" radius="0.065" color="#22d3ee"></a-sphere>
                 <a-sphere position="0.02 0.09 -0.12" radius="0.065" color="#38bdf8"></a-sphere>
                 <a-sphere position="0.14 0.09 -0.05" radius="0.065" color="#818cf8"></a-sphere>
@@ -1984,10 +2280,7 @@
                 <a-sphere position="0.00 0.19 0.00" radius="0.065" color="#38bdf8"></a-sphere>
               </a-entity>
 
-              <!-- Overhead Funnel / Hopper -->
-              <a-cone position="0 0.68 0" radius-bottom="0.07" radius-top="0.24" height="0.26" rotation="0 0 0" color="#64748b" material="metalness: 0.4; roughness: 0.5;"></a-cone>
-
-              <!-- Continuously Dropping 3D Ball -->
+              <a-cone position="0 0.68 0" radius-bottom="0.07" radius-top="0.24" height="0.26" color="#64748b" material="metalness: 0.4; roughness: 0.5;"></a-cone>
               <a-sphere id="ar-dropping-ball" position="0 0.55 0" radius="0.06" color="#22d3ee"></a-sphere>
             </a-entity>
 
@@ -1999,16 +2292,13 @@
       startARAnimationLoop();
     }
 
-    /**
-     * Animates the 3D box shake and dropping ball inside the AR Hiro scene.
-     */
     function startARAnimationLoop() {
       let dropY = 0.55;
       const animateAR = (ts) => {
         if (state.mode !== 'ar') return;
 
         const vib = getPrimaryVibration();
-        const amp = Math.min(0.055, Math.max(0.004, (vib - 1.2) * 0.018));
+        const amp = state.outage.active ? 0 : Math.min(0.055, Math.max(0.004, (vib - 1.2) * 0.018));
 
         const vibBox = document.getElementById('ar-vib-box');
         if (vibBox) {
@@ -2018,7 +2308,7 @@
         }
 
         const ball = document.getElementById('ar-dropping-ball');
-        if (ball) {
+        if (ball && !state.outage.active) {
           dropY -= 0.014;
           if (dropY < 0.16) dropY = 0.55;
           ball.setAttribute('position', `0 ${dropY.toFixed(3)} 0`);
@@ -2029,13 +2319,10 @@
       state.arAnimFrame = requestAnimationFrame(animateAR);
     }
 
-    /**
-     * Synchronizes live telemetry numbers and status colors onto the 3D AR board.
-     */
     function updateARSceneTelemetry() {
       if (state.mode !== 'ar') return;
       const liveVal = getPrimaryVibration();
-      const status = getVibrationStatus(liveVal);
+      const status = getEffectiveStatus(liveVal);
 
       const setAttr = (id, attr, val) => {
         const el = document.getElementById(id);
@@ -2044,8 +2331,14 @@
 
       setAttr('ar-txt-ws', 'value', `${state.ws.value.toFixed(4)} mm/s`);
       setAttr('ar-txt-mqtt', 'value', `${state.mqtt.value.toFixed(4)} mm/s`);
-      setAttr('ar-txt-latest', 'value', `${state.rest.latest.value.toFixed(4)} mm/s`);
       setAttr('ar-txt-avg', 'value', `${state.rest.average.value.toFixed(4)} mm/s`);
+
+      setAttr('ar-txt-alarm', 'value', state.alarm.active ? 'ALARM AKTIV' : 'OK (ENTWARNUNG)');
+      setAttr('ar-txt-alarm', 'color', state.alarm.active ? '#f43f5e' : '#34d399');
+
+      setAttr('ar-txt-outage', 'value', state.outage.active ? 'AUSFALL (>15s)' : 'ONLINE');
+      setAttr('ar-txt-outage', 'color', state.outage.active ? '#f97316' : '#34d399');
+
       setAttr('ar-status-text', 'value', status.label);
       setAttr('ar-status-pill', 'color', status.hex);
       setAttr('ar-board-border', 'color', status.hex);
@@ -2055,16 +2348,12 @@
       }
     }
 
-    /**
-     * Cleanly destroys the A-Frame scene and stops all webcam MediaStream tracks.
-     */
     function destroyARScene() {
       if (state.arAnimFrame) {
         cancelAnimationFrame(state.arAnimFrame);
         state.arAnimFrame = null;
       }
 
-      // Stop all active webcam tracks attached to any video elements created by AR.js
       document.querySelectorAll('video').forEach((video) => {
         try {
           const stream = video.srcObject;
@@ -2076,11 +2365,8 @@
         } catch {}
       });
 
-      // Remove A-Frame scene
       const container = document.getElementById('ar-container');
       if (container) container.innerHTML = '';
-
-      // Remove any leftover AR.js debug/overlay elements on body
       document.querySelectorAll('.arjs-loader, #arjsDebugUIContainer').forEach(el => el.remove());
     }
 
@@ -2117,13 +2403,20 @@
      * =========================================================================
      */
     window.addEventListener('load', () => {
+      loadSettingsFromStorage();
+      applySettingsToInputs();
       initChart();
       seedInitialSimulationHistory();
       updateAllDisplays();
+      updateConnectionBadges();
       initMachineCanvas();
 
-      // Start built-in simulation loop (every 2 seconds)
-      state.simInterval = setInterval(runSimulationTick, 2000);
+      if (state.simulation) {
+        state.simInterval = setInterval(runSimulationTick, 2000);
+      }
+      if (state.rest.autoPoll) {
+        toggleRestAutoPoll(true);
+      }
     });
   </script>
 </body>
